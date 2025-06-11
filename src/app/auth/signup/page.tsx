@@ -1,6 +1,5 @@
 "use client"
 import { useState } from "react"
-import { useRouter } from "next/navigation"
 import Link from 'next/link'
 import { useAuthStore } from "../../lib/stores/authStore"
 import { FormEvent } from 'react';
@@ -12,7 +11,6 @@ export default function SignupPage() {
     const [error, setError] = useState('')
     const [loading, setLoading] = useState(false)
     const [success, setSuccess] = useState(false)
-    const router = useRouter()
 
     // Get signup function from Zustand store
     const signUp = useAuthStore((state)=>state.signUp)
@@ -55,7 +53,7 @@ export default function SignupPage() {
                 <div className="text-6xl mb-4">📧</div>
                 <h2 className="text-2xl font-bold mb-4">Check Your Email</h2>
                 <p className="text-gray-600 mb-6">
-                    We've sent you a confirmation link at <strong>{email}</strong>. 
+                    We&apos;ve sent you a confirmation link at <strong>{email}</strong>. 
                     Please click the link to verify your account before signing in.
                 </p>
                 <Link 

@@ -18,7 +18,7 @@ export const useClientAuthStore = (selector) => {
     setState(selector ? selector(useAuthStore.getState()) : useAuthStore.getState())
     
     return unsubscribe
-  }, [])
+  }, [selector]) // Added selector to dependency array
   
   return state
 }

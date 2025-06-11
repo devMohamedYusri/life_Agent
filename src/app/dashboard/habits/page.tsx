@@ -1,5 +1,5 @@
 'use client'
-import { useState, useEffect } from 'react'
+import { useState, useEffect ,useCallback} from 'react'
 import { useAuthStore } from '../../lib/stores/authStore'
 import { habitService } from '../../lib/database/habits'
 import { categoryService } from '../../lib/database/categories'
@@ -11,18 +11,13 @@ interface Habit {
   reminder_time: string
   frequency: string
   target_count: number
-  category?: { name: string; color: string; icon: string }
-}
-
-interface HabitCompletion {
-  completion_date: string
-  is_completed: boolean
+  category?: { category_id:string ,name: string; color: string; icon: string }
 }
 
 export default function HabitsPage() {
   const { user } = useAuthStore()
   const [habits, setHabits] = useState<Habit[]>([])
-  const [categories, setCategories] = useState<any[]>([])
+  const [categories, setCategories] = useState<{ category_id: string; name: string; color: string; icon: string }[]>([])
   const [completions, setCompletions] = useState<{ [key: string]: boolean }>({})
   const [loading, setLoading] = useState(true)
   const [showCreateModal, setShowCreateModal] = useState(false)
@@ -36,13 +31,7 @@ export default function HabitsPage() {
     category_id: ''
   })
 
-  useEffect(() => {
-    if (user) {
-      loadData()
-    }
-  }, [user])
-
-  const loadData = async () => {
+  const loadData = useCallback(async () => {
     try {
       setLoading(true)
       const { data: habitsData } = await habitService.getUserHabits(user!.id)
@@ -52,7 +41,7 @@ export default function HabitsPage() {
       setCategories(categoriesData || [])
       
       // Check today's completions
-      const today = new Date().toISOString().split('T')[0]
+    //   const today = new Date().toISOString().split('T')[0]
       const todayCompletions: { [key: string]: boolean } = {}
       
       for (const habit of habitsData || []) {
@@ -66,7 +55,13 @@ export default function HabitsPage() {
     } finally {
       setLoading(false)
     }
-  }
+  }, [user])
+
+  useEffect(() => {
+    if (user) {
+      loadData()
+    }
+  }, [user, loadData])
 
   const handleCreateHabit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -122,7 +117,9 @@ export default function HabitsPage() {
     }
   }
 
-  const getStreakDisplay = (habitId: string) => {
+//   const getStreakDisplay = (habitId: string) => {
+  const getStreakDisplay = () => {
+
     // This would need to be implemented with actual streak calculation
     return '0 days'
   }
@@ -156,7 +153,7 @@ export default function HabitsPage() {
 
       {/* Today's Progress */}
       <div className="bg-white p-6 rounded-lg shadow mb-6">
-        <h2 className="text-lg font-semibold mb-4">Today's Progress</h2>
+        <h2 className="text-lg font-semibold mb-4">Today&apos;s Progress</h2>
         <div className="flex items-center justify-between">
           <div className="text-3xl font-bold text-purple-600">
             {Object.values(completions).filter(Boolean).length} / {habits.length}
@@ -230,7 +227,7 @@ export default function HabitsPage() {
                   
                   <div className="flex items-center justify-between text-sm">
                     <span className="text-gray-500">Streak:</span>
-                    <span className="font-medium text-purple-600">{getStreakDisplay(habit.habit_id)}</span>
+                    <span className="font-medium text-purple-600">{getStreakDisplay()}</span>
                   </div>
                 </div>
 

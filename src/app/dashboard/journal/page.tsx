@@ -1,5 +1,5 @@
 'use client'
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { useAuthStore } from '../../lib/stores/authStore'
 import { journalService } from '../../lib/database/journal'
 
@@ -26,7 +26,6 @@ export default function JournalPage() {
   const [entries, setEntries] = useState<JournalEntry[]>([])
   const [loading, setLoading] = useState(true)
   const [showCreateModal, setShowCreateModal] = useState(false)
-  const [selectedEntry, setSelectedEntry] = useState<JournalEntry | null>(null)
   const [filter, setFilter] = useState('all')
   const [searchTerm, setSearchTerm] = useState('')
   
@@ -38,23 +37,30 @@ export default function JournalPage() {
     entry_date: new Date().toISOString().split('T')[0]
   })
 
-  useEffect(() => {
-    if (user) {
-      loadEntries()
-    }
-  }, [user])
-
-  const loadEntries = async () => {
+  // Memoize loadEntries with useCallback
+  const loadEntries = useCallback(async () => {
+    if (!user?.id) return
+    
     try {
       setLoading(true)
-      const { data } = await journalService.getUserJournalEntries(user!.id)
-      setEntries(data || [])
+      const { data, error } = await journalService.getUserJournalEntries(user.id)
+      
+      if (error) {
+        console.error('Error loading entries:', error)
+      } else {
+        setEntries(data || [])
+      }
     } catch (error) {
       console.error('Error loading entries:', error)
     } finally {
       setLoading(false)
     }
-  }
+  }, [user?.id]) // Only depend on user.id
+
+  // Load entries when user changes
+  useEffect(() => {
+    loadEntries()
+  }, [loadEntries])
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -278,7 +284,7 @@ export default function JournalPage() {
               </div>
               
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">What's on your mind?</label>
+                <label className="block text-sm font-medium text-gray-700 mb-1">What&apos;s on your mind?</label>
                 <textarea
                   value={formData.content}
                   onChange={(e) => setFormData({ ...formData, content: e.target.value })}

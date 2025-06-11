@@ -1,5 +1,5 @@
 'use client'
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { useAuthStore } from '../../lib/stores/authStore'
 import { goalService } from '../../lib/database/goals'
 import { categoryService } from '../../lib/database/categories'
@@ -14,7 +14,12 @@ interface Goal {
   status: string
   priority: string
   category?: { name: string; color: string; icon: string }
-  tasks: any[]
+  tasks: {
+    id: string
+    title: string
+    completed: boolean
+    due_date?: string
+  }[]
 }
 
 export default function GoalsPage() {
@@ -34,27 +39,26 @@ export default function GoalsPage() {
     category_id: ''
   })
 
-  useEffect(() => {
-    if (user) {
-      loadData()
-    }
-  }, [user])
-
-  const loadData = async () => {
+  const loadData = useCallback(async () => {
+    if (!user) return;
+    
     try {
       setLoading(true)
-      const { data: goalsData } = await goalService.getUserGoals(user!.id)
+      const { data: goalsData } = await goalService.getUserGoals(user.id)
       setGoals(goalsData || [])
       
-      const { data: categoriesData } = await categoryService.getUserCategories(user!.id)
+      const { data: categoriesData } = await categoryService.getUserCategories(user.id)
       setCategories(categoriesData || [])
     } catch (error) {
       console.error('Error loading data:', error)
     } finally {
       setLoading(false)
     }
-  }
+  }, [user]) // Add user as dependency
 
+  useEffect(() => {
+    loadData()
+  }, [loadData]) 
   const handleCreateGoal = async (e: React.FormEvent) => {
     e.preventDefault()
     

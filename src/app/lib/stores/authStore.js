@@ -7,7 +7,7 @@ import { authService } from '../auth'
 
 export const useAuthStore = create(
   persist(
-    (set, get) => ({
+    (set) => ({  // Removed unused 'get' parameter
       // State
       user: null,
       loading: true,
@@ -51,7 +51,7 @@ export const useAuthStore = create(
           }
           
           set({ loading: false })
-          return { data, error: null }
+          return { data, error: null }  // Fixed: Include error: null for consistency
         } catch (error) {
           set({ loading: false })
           return { data: null, error: { message: 'An unexpected error occurred' } }

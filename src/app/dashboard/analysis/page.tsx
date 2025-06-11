@@ -1,5 +1,5 @@
 'use client'
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { useAuthStore } from '../../lib/stores/authStore'
 import { userService } from '../../lib/database/users'
 import { journalService } from '../../lib/database/journal'
@@ -14,21 +14,25 @@ interface Stats {
   totalHabits: number
 }
 
+interface MoodData {
+  [mood: string]: number
+}
+
+interface WeeklyTaskData {
+  day: string
+  completed: number
+  total: number
+}
+
 export default function AnalysisPage() {
   const { user } = useAuthStore()
   const [stats, setStats] = useState<Stats | null>(null)
-  const [moodData, setMoodData] = useState<any>({})
-  const [weeklyTaskData, setWeeklyTaskData] = useState<any[]>([])
+  const [moodData, setMoodData] = useState<MoodData>({})
+  const [weeklyTaskData, setWeeklyTaskData] = useState<WeeklyTaskData[]>([])
   const [loading, setLoading] = useState(true)
   const [dateRange, setDateRange] = useState('week')
 
-  useEffect(() => {
-    if (user) {
-      loadAnalytics()
-    }
-  }, [user, dateRange])
-
-  const loadAnalytics = async () => {
+  const loadAnalytics = useCallback(async () => {
     try {
       setLoading(true)
 
@@ -52,10 +56,10 @@ export default function AnalysisPage() {
         startDate.toISOString().split('T')[0],
         endDate
       )
-      setMoodData(moodStats || {})
+      setMoodData((moodStats || {}) as MoodData)
 
       // Load weekly task completion data (simplified)
-      const weekData = []
+      const weekData: WeeklyTaskData[] = []
       const days = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']
       const today = new Date()
       
@@ -78,7 +82,13 @@ export default function AnalysisPage() {
     } finally {
       setLoading(false)
     }
-  }
+  }, [user, dateRange])
+
+  useEffect(() => {
+    if (user) {
+      loadAnalytics()
+    }
+  }, [user, dateRange, loadAnalytics])
 
   const calculateCompletionRate = () => {
     if (!stats || stats.totalTasks === 0) return 0
@@ -173,7 +183,7 @@ export default function AnalysisPage() {
                       className="bg-purple-600 h-2 rounded-full"
                       style={{ 
                         width: `${Object.values(moodData).length > 0 
-                          ? ((count as number) / Object.values(moodData).reduce((a: number, b: any) => a + b, 0)) * 100 
+                          ? ((count as number) / Object.values(moodData).reduce((a: number, b: number) => a + b, 0)) * 100 
                           : 0}%` 
                       }}
                     />
@@ -277,7 +287,7 @@ export default function AnalysisPage() {
             </div>
             <span>More</span>
           </div>
-        </div>
+          </div>
       </div>
 
       {/* Insights Section */}
@@ -288,7 +298,7 @@ export default function AnalysisPage() {
             <h3 className="text-lg font-semibold mb-2">📈 Productivity Trends</h3>
             <p className="text-purple-100">
               Your task completion rate has improved by 15% this week. 
-              You're most productive on Wednesdays and Thursdays.
+              You&apos;re most productive on Wednesdays and Thursdays.
             </p>
           </div>
           <div>

@@ -1,7 +1,7 @@
 // app/dashboard/calendar/page.tsx
 'use client'
 
-import { useState, useEffect, useMemo } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { useAuthStore } from '../../lib/stores/authStore'
 import { taskService } from '../../lib/database/tasks'
 import { goalService } from '../../lib/database/goals'
@@ -78,23 +78,37 @@ export default function CalendarPage() {
   const [showEventModal, setShowEventModal] = useState(false)
   const [selectedEvent, setSelectedEvent] = useState<CalendarEvent | null>(null)
 
-  useEffect(() => {
-    if (user) {
-      loadCalendarEvents()
-    }
-  }, [user, currentDate, filters])
-
-  const loadCalendarEvents = async () => {
+  // Memoize loadCalendarEvents with useCallback
+  const loadCalendarEvents = useCallback(async () => {
+    if (!user?.id) return
+    
     try {
       setLoading(true)
-      const startDate = new Date(currentDate.getFullYear(), currentDate.getMonth(), 1)
-      const endDate = new Date(currentDate.getFullYear(), currentDate.getMonth() + 1, 0)
       
       const eventsByDay: DayEvents = {}
 
-      // Load tasks
+      // Load all data in parallel
+      const promises = []
+
       if (filters.tasks) {
-        const { data: tasks } = await taskService.getUserTasks(user!.id)
+        promises.push(taskService.getUserTasks(user.id))
+      }
+      if (filters.goals) {
+        promises.push(goalService.getUserGoals(user.id))
+      }
+      if (filters.habits) {
+        promises.push(habitService.getUserHabits(user.id))
+      }
+      if (filters.journal) {
+        promises.push(journalService.getUserJournalEntries(user.id))
+      }
+
+      const results = await Promise.all(promises)
+      let resultIndex = 0
+
+      // Process tasks
+      if (filters.tasks) {
+        const { data: tasks } = results[resultIndex++] || { data: null }
         tasks?.forEach((task: Task) => {
           if (task.due_date) {
             const dateKey = new Date(task.due_date).toDateString()
@@ -114,9 +128,9 @@ export default function CalendarPage() {
         })
       }
 
-      // Load goals
+      // Process goals
       if (filters.goals) {
-        const { data: goals } = await goalService.getUserGoals(user!.id)
+        const { data: goals } = results[resultIndex++] || { data: null }
         goals?.forEach((goal: Goal) => {
           if (goal.deadline) {
             const dateKey = new Date(goal.deadline).toDateString()
@@ -133,10 +147,9 @@ export default function CalendarPage() {
         })
       }
 
-      // Load habits
+      // Process habits
       if (filters.habits) {
-        const { data: habits } = await habitService.getUserHabits(user!.id)
-        // For habits, we'll show them on today's date as they're daily
+        const { data: habits } = results[resultIndex++] || { data: null }
         const todayKey = new Date().toDateString()
         habits?.forEach((habit: Habit) => {
           if (!eventsByDay[todayKey]) eventsByDay[todayKey] = []
@@ -150,9 +163,9 @@ export default function CalendarPage() {
         })
       }
 
-      // Load journal entries
+      // Process journal entries
       if (filters.journal) {
-        const { data: entries } = await journalService.getUserJournalEntries(user!.id)
+        const { data: entries } = results[resultIndex++] || { data: null }
         entries?.forEach(entry => {
           const dateKey = new Date(entry.created_at).toDateString()
           if (!eventsByDay[dateKey]) eventsByDay[dateKey] = []
@@ -173,7 +186,12 @@ export default function CalendarPage() {
     } finally {
       setLoading(false)
     }
-  }
+  }, [user?.id, filters.tasks, filters.goals, filters.habits, filters.journal]) // Only depend on necessary values
+
+  // Load events when dependencies change
+  useEffect(() => {
+    loadCalendarEvents()
+  }, [loadCalendarEvents])
 
   const getDaysInMonth = (date: Date) => {
     const year = date.getFullYear()
@@ -197,11 +215,11 @@ export default function CalendarPage() {
 
     // Add current month's days
     for (let i = 1; i <= daysInMonth; i++) {
-      const currentDate = new Date(year, month, i)
+      const currentDateInMonth = new Date(year, month, i)
       days.push({
-        date: currentDate,
+        date: currentDateInMonth,
         isCurrentMonth: true,
-        events: events[currentDate.toDateString()] || []
+        events: events[currentDateInMonth.toDateString()] || []
       })
     }
 
@@ -268,7 +286,7 @@ export default function CalendarPage() {
           ))}
 
           {/* Calendar days */}
-          {days.map(({ date, isCurrentMonth, events }, index) => (
+          {days.map(({ date, isCurrentMonth, events: dayEvents }, index) => (
             <div
               key={index}
               onClick={() => handleDayClick(date)}
@@ -283,16 +301,16 @@ export default function CalendarPage() {
                 <span className={`text-sm font-medium ${isToday(date) ? 'text-blue-600' : ''}`}>
                   {date.getDate()}
                 </span>
-                {events.length > 0 && (
+                {dayEvents.length > 0 && (
                   <span className="text-xs bg-gray-200 text-gray-700 px-1.5 py-0.5 rounded-full">
-                    {events.length}
+                    {dayEvents.length}
                   </span>
                 )}
               </div>
 
               {/* Event dots */}
               <div className="space-y-1">
-                {events.slice(0, 3).map((event, i) => (
+                {dayEvents.slice(0, 3).map((event, i) => (
                   <div
                     key={i}
                     onClick={(e) => handleEventClick(event, e)}
@@ -305,9 +323,9 @@ export default function CalendarPage() {
                     <span className="truncate">{event.title}</span>
                   </div>
                 ))}
-                {events.length > 3 && (
+                {dayEvents.length > 3 && (
                   <span className="text-xs text-gray-500 px-1">
-                    +{events.length - 3} more
+                    +{dayEvents.length - 3} more
                   </span>
                 )}
               </div>
@@ -317,7 +335,6 @@ export default function CalendarPage() {
       </div>
     )
   }
-
   const renderWeekView = () => {
     const startOfWeek = new Date(currentDate)
     const day = startOfWeek.getDay()
@@ -347,7 +364,7 @@ export default function CalendarPage() {
           </div>
 
           {/* Day columns */}
-          {weekDays.map(({ date, events }, index) => (
+          {weekDays.map(({ date, events: dayEvents }, index) => (
             <div key={index} className="bg-white">
               <div className="p-4 border-b text-center">
                 <div className="text-sm font-medium text-gray-500">
@@ -358,7 +375,7 @@ export default function CalendarPage() {
                 </div>
               </div>
               <div className="relative h-[1536px]"> {/* 24 * 64px */}
-                {events.map((event, i) => (
+                {dayEvents.map((event, i) => (
                   <div
                     key={i}
                     className="absolute left-1 right-1 p-1 text-xs rounded cursor-pointer hover:opacity-80"
@@ -514,10 +531,10 @@ export default function CalendarPage() {
 
           {/* View Selector */}
           <div className="flex items-center space-x-2">
-            {['month', 'week', 'day'].map((v) => (
+            {(['month', 'week', 'day'] as const).map((v) => (
               <button
                 key={v}
-                onClick={() => setView(v as any)}
+                onClick={() => setView(v)}
                 className={`px-3 py-1 rounded-md capitalize ${
                   view === v
                     ? 'bg-purple-600 text-white'

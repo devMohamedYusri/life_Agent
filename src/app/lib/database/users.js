@@ -59,7 +59,7 @@ export const userService={
 
     const {data:tasks,error:tasksError}=await client
     .from('tasks')
-    .selct('task_id','status')
+    .select('task_id','status')
     .eq('user_id',userId)
 
 
@@ -80,7 +80,7 @@ export const userService={
     const stats={
         totalGoals:goals?.length || 0,
         activeGoals:goals?.filter(g=>g.status==="active").length || 0,
-        completedGoals:goals?.filter(g=>goals.status==='completed').length || 0,
+        completedGoals:goals?.filter(g=>g.status==='completed').length || 0,
         totalTasks:tasks?.length||0,
         completedTasks:tasks?.filter(t=>t.status==="completed").length || 0,
         pendingTasks:tasks?.filter(t=>t.status==="pending").length || 0,

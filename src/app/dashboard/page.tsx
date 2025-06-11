@@ -3,32 +3,68 @@ import { useEffect, useState } from 'react'
 import { useAuthStore } from '../lib/stores/authStore'
 import { userService } from '../lib/database/users'
 
+interface UserStats {
+  totalHabits: number;
+  totalGoals: number;
+  activeGoals: number;
+  pendingTasks: number;
+}
+
 export default function DashboardPage() {
   const { user } = useAuthStore()
-  const [stats, setStats] = useState<any>(null)
+  const [stats, setStats] = useState<UserStats | null>(null)
   const [loading, setLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
 
   useEffect(() => {
+    const loadDashboardData = async () => {
+      if (!user) {
+        console.log('No user found, skipping data load')
+        setLoading(false)
+        setStats(null)
+        return
+      }
+
+      try {
+        console.log('Loading dashboard data for user:', user.id)
+        const { data: userStats, error: statsError } = await userService.getUserStats(user.id)
+        
+        if (statsError) {
+          console.error('Error fetching stats:', statsError)
+          setError('Failed to load dashboard data. Please try again.')
+          setStats(null)
+        } else {
+          console.log('Successfully loaded stats:', userStats)
+          setStats(userStats)
+          setError(null)
+        }
+      } catch (error) {
+        console.error('Unexpected error loading dashboard data:', error)
+        setError('An unexpected error occurred. Please refresh the page.')
+        setStats(null)
+      } finally {
+        setLoading(false)
+        console.log('Loading completed, state set to false')
+      }
+    }
+
     loadDashboardData()
   }, [user])
-
-  const loadDashboardData = async () => {
-    if (!user) return
-
-    try {
-      const { data: userStats } = await userService.getUserStats(user.id)
-      setStats(userStats)
-    } catch (error) {
-      console.error('Error loading dashboard data:', error)
-    } finally {
-      setLoading(false)
-    }
-  }
 
   if (loading) {
     return (
       <div className="flex items-center justify-center h-64">
         <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-purple-500"></div>
+      </div>
+    )
+  }
+
+  if (error) {
+    return (
+      <div className="flex items-center justify-center h-64">
+        <div className="text-red-600 bg-red-50 p-4 rounded-lg shadow">
+          {error}
+        </div>
       </div>
     )
   }

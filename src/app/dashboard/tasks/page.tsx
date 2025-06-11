@@ -1,5 +1,5 @@
 'use client'
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { useAuthStore } from '../../lib/stores/authStore'
 import { taskService } from '../../lib/database/tasks'
 import { categoryService } from '../../lib/database/categories'
@@ -20,8 +20,8 @@ interface Task {
 export default function TasksPage() {
   const { user } = useAuthStore()
   const [tasks, setTasks] = useState<Task[]>([])
-  const [categories, setCategories] = useState<any[]>([])
-  const [goals, setGoals] = useState<any[]>([])
+  const [categories, setCategories] = useState<{ category_id: string; name: string; icon: string; color: string }[]>([])
+  const [goals, setGoals] = useState<{ goal_id: string; title: string; description: string }[]>([])
   const [loading, setLoading] = useState(true)
   const [showCreateModal, setShowCreateModal] = useState(false)
   const [filter, setFilter] = useState('all')
@@ -37,34 +37,38 @@ export default function TasksPage() {
     status: 'pending'
   })
 
-  useEffect(() => {
-    if (user) {
-      loadData()
-    }
-  }, [user])
-
-  const loadData = async () => {
+  // Memoize loadData with useCallback
+  const loadData = useCallback(async () => {
+    if (!user?.id) return
+    
     try {
       setLoading(true)
       
-      // Load tasks
-      const { data: tasksData, error: tasksError } = await taskService.getUserTasks(user!.id)
-      if (tasksError) throw tasksError
-      setTasks(tasksData || [])
+      // Load all data in parallel
+      const [tasksResult, categoriesResult, goalsResult] = await Promise.all([
+        taskService.getUserTasks(user.id),
+        categoryService.getUserCategories(user.id),
+        goalService.getUserGoals(user.id)
+      ])
       
-      // Load categories
-      const { data: categoriesData } = await categoryService.getUserCategories(user!.id)
-      setCategories(categoriesData || [])
+      // Check for errors
+      if (tasksResult.error) throw tasksResult.error
       
-      // Load goals
-      const { data: goalsData } = await goalService.getUserGoals(user!.id)
-      setGoals(goalsData || [])
+      // Update state
+      setTasks(tasksResult.data || [])
+      setCategories(categoriesResult.data || [])
+      setGoals(goalsResult.data || [])
     } catch (error) {
       console.error('Error loading data:', error)
     } finally {
       setLoading(false)
     }
-  }
+  }, [user?.id]) // Only depend on user.id
+
+  // Load data when user changes
+  useEffect(() => {
+    loadData()
+  }, [loadData])
 
   const handleCreateTask = async (e: React.FormEvent) => {
     e.preventDefault()

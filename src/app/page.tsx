@@ -103,7 +103,7 @@ export default function Home() {
           </h2>
           <p className="text-gray-300 mb-8 max-w-2xl mx-auto">
             Join thousands of users who have already revolutionized their
-            productivity with LifeAgent's AI-powered life management system.
+            productivity with LifeAgent&apos;s AI-powered life management system.
           </p>
 
           <div className="flex flex-col sm:flex-row gap-4 justify-center items-center">
