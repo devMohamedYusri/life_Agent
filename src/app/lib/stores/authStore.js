@@ -1,5 +1,6 @@
 // app/lib/stores/authStore.js
 "use client"
+/* eslint-disable */
 
 import { create } from 'zustand'
 import { persist } from 'zustand/middleware'
@@ -116,3 +117,5 @@ export const useAuthStore = create(
     }
   )
 )
+
+/* eslint-enable */

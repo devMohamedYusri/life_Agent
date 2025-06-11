@@ -25,7 +25,7 @@ interface Goal {
 export default function GoalsPage() {
   const { user } = useAuthStore()
   const [goals, setGoals] = useState<Goal[]>([])
-  const [categories, setCategories] = useState<any[]>([])
+  const [categories, setCategories] = useState<{ category_id: string; name: string; icon: string; color: string }[]>([])
   const [loading, setLoading] = useState(true)
   const [showCreateModal, setShowCreateModal] = useState(false)
   const [filter, setFilter] = useState('all')

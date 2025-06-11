@@ -32,7 +32,7 @@ export default function ResetPasswordPage() {
         <div className="text-6xl mb-4">📧</div>
         <h2 className="text-2xl font-bold mb-4">Check Your Email</h2>
         <p className="text-gray-600 mb-6">
-          If an account with <strong>{email}</strong> exists, we've sent you a password reset link.
+          If an account with <strong>{email}</strong> exists, we&apos;ve sent you a password reset link.
         </p>
         <Link 
           href="/auth/login"
