@@ -136,8 +136,4 @@ export const goalService={
 
         return {data,error}
        },
-
-
-
-
 }

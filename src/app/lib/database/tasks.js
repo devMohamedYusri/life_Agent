@@ -13,8 +13,7 @@ export const taskService={
       .eq("user_id",userId)
       .order('created_at',{ascending:false})
 
-      return (data,error)
-
+      return {data,error}
     },
 
     //get tasks by status
