@@ -9,7 +9,7 @@ interface JournalEntry {
   mood: string
   tags: string[]
   entry_date: string
-  notes: string
+  notes: string | null
 }
 
 const MOODS = [
@@ -37,7 +37,6 @@ export default function JournalPage() {
     entry_date: new Date().toISOString().split('T')[0]
   })
 
-  // Memoize loadEntries with useCallback
   const loadEntries = useCallback(async () => {
     if (!user?.id) return
     
@@ -55,20 +54,20 @@ export default function JournalPage() {
     } finally {
       setLoading(false)
     }
-  }, [user?.id]) // Only depend on user.id
+  }, [user?.id])
 
-  // Load entries when user changes
   useEffect(() => {
     loadEntries()
   }, [loadEntries])
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
+    if (!user) return
     
     try {
       const entryData = {
         ...formData,
-        user_id: user!.id,
+        user_id: user.id,
         tags: formData.tags.split(',').map(tag => tag.trim()).filter(tag => tag),
         is_ai_prompted: false
       }
@@ -138,14 +137,14 @@ export default function JournalPage() {
   return (
     <div>
       {/* Header */}
-      <div className="mb-8 flex justify-between items-center">
+      <div className="mb-8 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
         <div>
-          <h1 className="text-3xl font-bold text-gray-900">Journal</h1>
-          <p className="text-gray-600 mt-2">Track your thoughts and emotions</p>
+          <h1 className="text-3xl font-bold text-gray-900 dark:text-white">Journal</h1>
+          <p className="text-gray-600 dark:text-gray-400 mt-2">Track your thoughts and emotions</p>
         </div>
         <button
           onClick={() => setShowCreateModal(true)}
-          className="bg-purple-600 text-white px-4 py-2 rounded-md hover:bg-purple-700 flex items-center space-x-2"
+          className="bg-purple-600 dark:bg-purple-500 text-white px-4 py-2 rounded-md hover:bg-purple-700 dark:hover:bg-purple-600 flex items-center space-x-2 transition-colors"
         >
           <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
@@ -155,26 +154,26 @@ export default function JournalPage() {
       </div>
 
       {/* Search and Filters */}
-      <div className="bg-white p-4 rounded-lg shadow mb-6">
-        <div className="flex flex-col sm:flex-row gap-4">
+      <div className="bg-white dark:bg-gray-800 p-4 rounded-lg shadow mb-6">
+        <div className="flex flex-col lg:flex-row gap-4">
           <div className="flex-1">
             <input
               type="text"
               placeholder="Search entries..."
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
-              className="w-full px-4 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-purple-500"
+              className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded-md focus:outline-none focus:ring-2 focus:ring-purple-500"
             />
           </div>
-          <div className="flex space-x-2">
+          <div className="flex flex-wrap gap-2">
             {['all', 'week', 'month'].map((filterOption) => (
               <button
                 key={filterOption}
                 onClick={() => setFilter(filterOption)}
-                className={`px-4 py-2 rounded-md font-medium capitalize ${
+                className={`px-4 py-2 rounded-md font-medium capitalize transition-colors ${
                   filter === filterOption
-                    ? 'bg-purple-600 text-white'
-                    : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                    ? 'bg-purple-600 dark:bg-purple-500 text-white'
+                    : 'bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-600'
                 }`}
               >
                 {filterOption === 'all' ? 'All Time' : `Past ${filterOption}`}
@@ -187,18 +186,18 @@ export default function JournalPage() {
       {/* Entries List */}
       <div className="space-y-4">
         {filteredEntries.length === 0 ? (
-          <div className="bg-white p-8 rounded-lg shadow text-center">
-            <p className="text-gray-500">No journal entries found. Start writing!</p>
+          <div className="bg-white dark:bg-gray-800 p-8 rounded-lg shadow text-center">
+            <p className="text-gray-500 dark:text-gray-400">No journal entries found. Start writing!</p>
           </div>
         ) : (
           filteredEntries.map((entry) => (
-            <div key={entry.entry_id} className="bg-white rounded-lg shadow hover:shadow-md transition-shadow">
+            <div key={entry.entry_id} className="bg-white dark:bg-gray-800 rounded-lg shadow hover:shadow-md transition-shadow">
               <div className="p-6">
-                <div className="flex justify-between items-start mb-4">
+                <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-4 gap-2">
                   <div className="flex items-center space-x-3">
                     <span className="text-2xl">{getMoodEmoji(entry.mood)}</span>
                     <div>
-                      <h3 className="font-semibold text-gray-900">
+                      <h3 className="font-semibold text-gray-900 dark:text-white">
                         {new Date(entry.entry_date).toLocaleDateString('en-US', { 
                           weekday: 'long', 
                           year: 'numeric', 
@@ -206,12 +205,12 @@ export default function JournalPage() {
                           day: 'numeric' 
                         })}
                       </h3>
-                      <p className="text-sm text-gray-500">Feeling {entry.mood}</p>
+                      <p className="text-sm text-gray-500 dark:text-gray-400">Feeling {entry.mood}</p>
                     </div>
                   </div>
                   <button
                     onClick={() => deleteEntry(entry.entry_id)}
-                    className="text-red-500 hover:text-red-700"
+                    className="text-red-500 dark:text-red-400 hover:text-red-700 dark:hover:text-red-300 transition-colors"
                   >
                     <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
@@ -219,14 +218,14 @@ export default function JournalPage() {
                   </button>
                 </div>
 
-                <p className="text-gray-700 mb-4 whitespace-pre-wrap">{entry.content}</p>
+                <p className="text-gray-700 dark:text-gray-300 mb-4 whitespace-pre-wrap">{entry.content}</p>
 
                 {entry.tags && entry.tags.length > 0 && (
                   <div className="flex flex-wrap gap-2 mb-4">
                     {entry.tags.map((tag, index) => (
                       <span 
                         key={index}
-                        className="text-xs px-2 py-1 bg-purple-100 text-purple-700 rounded-full"
+                        className="text-xs px-2 py-1 bg-purple-100 dark:bg-purple-900 text-purple-700 dark:text-purple-300 rounded-full"
                       >
                         #{tag}
                       </span>
@@ -235,8 +234,8 @@ export default function JournalPage() {
                 )}
 
                 {entry.notes && (
-                  <div className="mt-4 p-3 bg-gray-50 rounded-md">
-                    <p className="text-sm text-gray-600">{entry.notes}</p>
+                  <div className="mt-4 p-3 bg-gray-50 dark:bg-gray-700 rounded-md">
+                    <p className="text-sm text-gray-600 dark:text-gray-300">{entry.notes}</p>
                   </div>
                 )}
               </div>
@@ -248,22 +247,22 @@ export default function JournalPage() {
       {/* Create Entry Modal */}
       {showCreateModal && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
-          <div className="bg-white rounded-lg max-w-2xl w-full p-6 max-h-[90vh] overflow-y-auto">
-            <h2 className="text-xl font-bold mb-4">New Journal Entry</h2>
+          <div className="bg-white dark:bg-gray-800 rounded-lg max-w-2xl w-full p-6 max-h-[90vh] overflow-y-auto">
+            <h2 className="text-xl font-bold mb-4 dark:text-white">New Journal Entry</h2>
             <form onSubmit={handleSubmit} className="space-y-4">
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Date</label>
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Date</label>
                 <input
                   type="date"
                   value={formData.entry_date}
                   onChange={(e) => setFormData({ ...formData, entry_date: e.target.value })}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-purple-500"
+                  className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded-md focus:outline-none focus:ring-2 focus:ring-purple-500"
                   required
                 />
               </div>
 
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">How are you feeling?</label>
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">How are you feeling?</label>
                 <div className="grid grid-cols-3 sm:grid-cols-6 gap-2">
                   {MOODS.map((mood) => (
                     <button
@@ -272,23 +271,23 @@ export default function JournalPage() {
                       onClick={() => setFormData({ ...formData, mood: mood.value })}
                       className={`p-3 rounded-lg border-2 transition-all ${
                         formData.mood === mood.value
-                          ? 'border-purple-500 bg-purple-50'
-                          : 'border-gray-200 hover:border-gray-300'
+                          ? 'border-purple-500 bg-purple-50 dark:bg-purple-900/20'
+                          : 'border-gray-200 dark:border-gray-600 hover:border-gray-300 dark:hover:border-gray-500'
                       }`}
                     >
                       <div className="text-2xl">{mood.emoji}</div>
-                      <div className="text-xs mt-1 capitalize">{mood.value}</div>
+                      <div className="text-xs mt-1 capitalize dark:text-gray-300">{mood.value}</div>
                     </button>
                   ))}
                 </div>
               </div>
               
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">What&apos;s on your mind?</label>
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">What&apos;s on your mind?</label>
                 <textarea
                   value={formData.content}
                   onChange={(e) => setFormData({ ...formData, content: e.target.value })}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-purple-500"
+                  className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded-md focus:outline-none focus:ring-2 focus:ring-purple-500"
                   rows={6}
                   placeholder="Write your thoughts here..."
                   required
@@ -296,22 +295,22 @@ export default function JournalPage() {
               </div>
 
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Tags (comma separated)</label>
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Tags (comma separated)</label>
                 <input
                   type="text"
                   value={formData.tags}
                   onChange={(e) => setFormData({ ...formData, tags: e.target.value })}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-purple-500"
+                  className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded-md focus:outline-none focus:ring-2 focus:ring-purple-500"
                   placeholder="gratitude, work, personal"
                 />
               </div>
 
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Additional Notes</label>
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Additional Notes</label>
                 <textarea
                   value={formData.notes}
                   onChange={(e) => setFormData({ ...formData, notes: e.target.value })}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-purple-500"
+                  className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded-md focus:outline-none focus:ring-2 focus:ring-purple-500"
                   rows={3}
                   placeholder="Any additional thoughts or reflections..."
                 />
@@ -321,13 +320,13 @@ export default function JournalPage() {
                 <button
                   type="button"
                   onClick={() => setShowCreateModal(false)}
-                  className="px-4 py-2 text-gray-700 bg-gray-100 rounded-md hover:bg-gray-200"
+                  className="px-4 py-2 text-gray-700 dark:text-gray-300 bg-gray-100 dark:bg-gray-700 rounded-md hover:bg-gray-200 dark:hover:bg-gray-600 transition-colors"
                 >
                   Cancel
                 </button>
                 <button
                   type="submit"
-                  className="px-4 py-2 bg-purple-600 text-white rounded-md hover:bg-purple-700"
+                  className="px-4 py-2 bg-purple-600 dark:bg-purple-500 text-white rounded-md hover:bg-purple-700 dark:hover:bg-purple-600 transition-colors"
                 >
                   Save Entry
                 </button>

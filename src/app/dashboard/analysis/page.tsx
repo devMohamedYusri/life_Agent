@@ -1,132 +1,311 @@
-'use client'
-import { useState, useEffect, useCallback } from 'react'
-import { useAuthStore } from '../../lib/stores/authStore'
-import { userService } from '../../lib/database/users'
-import { journalService } from '../../lib/database/journal'
+"use client";
+import { useState, useEffect } from "react";
+import { useAuthStore } from "../../lib/stores/authStore";
+import { journalService } from "../../lib/database/journal";
+import { taskService } from "../../lib/database/tasks";
+import { goalService } from "../../lib/database/goals";
+import { habitService } from "../../lib/database/habits";
 
 interface Stats {
-  totalGoals: number
-  activeGoals: number
-  completedGoals: number
-  totalTasks: number
-  completedTasks: number
-  pendingTasks: number
-  totalHabits: number
+  totalGoals: number;
+  activeGoals: number;
+  completedGoals: number;
+  totalTasks: number;
+  completedTasks: number;
+  pendingTasks: number;
+  totalHabits: number;
 }
 
 interface MoodData {
-  [mood: string]: number
+  [mood: string]: number;
 }
 
 interface WeeklyTaskData {
-  day: string
-  completed: number
-  total: number
+  day: string;
+  is_completed: number;
+  total: number;
+}
+
+interface TaskCategory {
+  category: string;
+  count: number;
+  percentage: number;
+  color: string;
+}
+
+interface HabitStreak {
+  date: string;
+  count: number;
 }
 
 export default function AnalysisPage() {
-  const { user } = useAuthStore()
-  const [stats, setStats] = useState<Stats | null>(null)
-  const [moodData, setMoodData] = useState<MoodData>({})
-  const [weeklyTaskData, setWeeklyTaskData] = useState<WeeklyTaskData[]>([])
-  const [loading, setLoading] = useState(true)
-  const [dateRange, setDateRange] = useState('week')
-
-  const loadAnalytics = useCallback(async () => {
-    try {
-      setLoading(true)
-
-      // Load general stats
-      const { data: userStats } = await userService.getUserStats(user!.id)
-      setStats(userStats)
-
-      // Load mood statistics
-      const endDate = new Date().toISOString().split('T')[0]
-      const startDate = new Date()
-      if (dateRange === 'week') {
-        startDate.setDate(startDate.getDate() - 7)
-      } else if (dateRange === 'month') {
-        startDate.setMonth(startDate.getMonth() - 1)
-      } else {
-        startDate.setFullYear(startDate.getFullYear() - 1)
-      }
-
-      const { data: moodStats } = await journalService.getMoodStats(
-        user!.id,
-        startDate.toISOString().split('T')[0],
-        endDate
-      )
-      setMoodData((moodStats || {}) as MoodData)
-
-      // Load weekly task completion data (simplified)
-      const weekData: WeeklyTaskData[] = []
-      const days = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']
-      const today = new Date()
-      
-      for (let i = 6; i >= 0; i--) {
-        const date = new Date(today)
-        date.setDate(today.getDate() - i)
-        const dayName = days[date.getDay()]
-        
-        // This would need actual task completion data for each day
-        weekData.push({
-          day: dayName,
-          completed: Math.floor(Math.random() * 10), // Placeholder data
-          total: Math.floor(Math.random() * 5) + 10  // Placeholder data
-        })
-      }
-      setWeeklyTaskData(weekData)
-
-    } catch (error) {
-      console.error('Error loading analytics:', error)
-    } finally {
-      setLoading(false)
-    }
-  }, [user, dateRange])
+  const { user } = useAuthStore();
+  const [stats, setStats] = useState<Stats | null>(null);
+  const [moodData, setMoodData] = useState<MoodData>({});
+  const [weeklyTaskData, setWeeklyTaskData] = useState<WeeklyTaskData[]>([]);
+  const [taskCategories, setTaskCategories] = useState<TaskCategory[]>([]);
+  const [habitStreaks, setHabitStreaks] = useState<HabitStreak[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [dateRange, setDateRange] = useState("week");
 
   useEffect(() => {
-    if (user) {
-      loadAnalytics()
+    if (!user) {
+      setLoading(false);
+      return;
     }
-  }, [user, dateRange, loadAnalytics])
+
+    let mounted = true;
+
+    const loadAnalytics = async () => {
+      try {
+        setLoading(true);
+
+        // Calculate date range
+        const endDate = new Date();
+        const startDate = new Date();
+        if (dateRange === "week") {
+          startDate.setDate(startDate.getDate() - 7);
+        } else if (dateRange === "month") {
+          startDate.setMonth(startDate.getMonth() - 1);
+        } else {
+          startDate.setFullYear(startDate.getFullYear() - 1);
+        }
+
+        // Load all tasks
+        const { data: allTasks, error: tasksError } = await taskService.getUserTasks(user.id);
+        
+        // Load all goals
+        const { data: allGoals, error: goalsError } = await goalService.getUserGoals(user.id);
+
+        // Calculate stats directly from tasks and goals
+        if (allTasks && allGoals && mounted) {
+          const totalTasks = allTasks.length;
+          const completedTasks = allTasks.filter(task => task.is_completed).length;
+          const pendingTasks = totalTasks - completedTasks;
+
+          const totalGoals = allGoals.length;
+          const completedGoals = allGoals.filter(goal => goal.status === 'completed').length;
+          const activeGoals = totalGoals - completedGoals;
+
+          setStats({
+            totalGoals,
+            activeGoals,
+            completedGoals,
+            totalTasks,
+            completedTasks,
+            pendingTasks,
+            totalHabits: stats?.totalHabits || 0  // Keep existing or default to 0
+          });
+        }
+
+        // Load mood statistics
+        const { data: moodStats, error: moodError } = await journalService.getMoodStats(
+          user.id,
+          startDate.toISOString().split("T")[0],
+          endDate.toISOString().split("T")[0]
+        );
+        if (!moodError && moodStats && mounted) {
+          setMoodData(moodStats as MoodData);
+        }
+
+        // Calculate weekly task data
+        if (!tasksError && allTasks && mounted) {
+          const weekData: WeeklyTaskData[] = [];
+          const days = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+
+          for (let i = 6; i >= 0; i--) {
+            const date = new Date();
+            date.setDate(date.getDate() - i);
+            const dateStr = date.toISOString().split("T")[0];
+            const dayName = days[date.getDay()];
+
+            const dayTasks = allTasks.filter(
+              (task: { due_date: string; completed: boolean }) => task.due_date && task.due_date.startsWith(dateStr)
+            );
+            const completedDayTasks = dayTasks.filter((task: { is_completed: boolean }) => task.is_completed);
+            weekData.push({
+              day: dayName,
+              is_completed: completedDayTasks.length,
+              total: dayTasks.length,
+            });
+          }
+          setWeeklyTaskData(weekData);
+
+          // Calculate task categories
+          const categoryMap: { [key: string]: number } = {};
+          const categoryColors: { [key: string]: string } = {
+            work: "#3b82f6",
+            personal: "#10b981",
+            health: "#f59e0b",
+            learning: "#8b5cf6",
+            other: "#6b7280",
+          };
+
+          allTasks.forEach((task: { category?: string }) => {
+            const category = task.category || "other";
+            categoryMap[category] = (categoryMap[category] || 0) + 1;
+          });
+
+          const total = allTasks.length;
+          const categories: TaskCategory[] = Object.entries(categoryMap).map(
+            ([category, count]) => ({
+              category: category.charAt(0).toUpperCase() + category.slice(1),
+              count,
+              percentage: total > 0 ? Math.round((count / total) * 100) : 0,
+              color: categoryColors[category] || "#6b7280",
+            })
+          );
+
+          setTaskCategories(categories.sort((a, b) => b.percentage - a.percentage));
+        }
+
+        // Load habit streaks
+        const { data: habits, error: habitsError } = await habitService.getUserHabits(user.id);
+        
+        if (!habitsError && habits && mounted) {
+          const streakData: HabitStreak[] = [];
+          
+          // Create date range for last 35 days
+          const dates: string[] = [];
+          for (let i = 34; i >= 0; i--) {
+            const date = new Date();
+            date.setDate(date.getDate() - i);
+            dates.push(date.toISOString().split('T')[0]);
+          }
+          
+          if (habits.length > 0) {
+            // Get all completions in one batch call
+            const startDate = dates[0];
+            const endDate = dates[dates.length - 1];
+            
+            const { data: allCompletions, error: completionsError } = 
+              await habitService.getBatchHabitCompletions(user.id, startDate, endDate);
+            
+            if (!completionsError && allCompletions && mounted) {
+              // Create a map for quick lookup
+              const completionMap = new Map<string, Set<string>>();
+              
+              allCompletions.forEach((completion: { completion_date: string; habit_id: string }) => {
+                const date = completion.completion_date;
+                if (!completionMap.has(date)) {
+                  completionMap.set(date, new Set());
+                }
+                completionMap.get(date)?.add(completion.habit_id);
+              });
+              
+              // Count completions for each date
+              dates.forEach(dateStr => {
+                const habitIdsCompleted = completionMap.get(dateStr);
+                streakData.push({
+                  date: dateStr,
+                  count: habitIdsCompleted ? habitIdsCompleted.size : 0
+                });
+              });
+            } else {
+              // If error, fill with zeros
+              dates.forEach(dateStr => {
+                streakData.push({
+                  date: dateStr,
+                  count: 0
+                });
+              });
+            }
+          } else {
+            // No habits, fill with zeros
+            dates.forEach(dateStr => {
+              streakData.push({
+                date: dateStr,
+                count: 0
+              });
+            });
+          }
+          
+          if (mounted) {
+            setHabitStreaks(streakData);
+          }
+        }
+
+      } catch (error) {
+        console.error("Error loading analytics:", error);
+      } finally {
+        if (mounted) {
+          setLoading(false);
+        }
+      }
+    };
+
+    loadAnalytics();
+
+    // Cleanup function
+    return () => {
+      mounted = false;
+    };
+  }, [user, dateRange]);
 
   const calculateCompletionRate = () => {
-    if (!stats || stats.totalTasks === 0) return 0
-    return Math.round((stats.completedTasks / stats.totalTasks) * 100)
-  }
+    if (!stats || stats.totalTasks === 0) return 0;
+    return Math.round((stats.completedTasks / stats.totalTasks) * 100);
+  };
 
   const calculateGoalSuccessRate = () => {
-    if (!stats || stats.totalGoals === 0) return 0
-    return Math.round((stats.completedGoals / stats.totalGoals) * 100)
-  }
+    if (!stats || stats.totalGoals === 0) return 0;
+    return Math.round((stats.completedGoals / stats.totalGoals) * 100);
+  };
+
+  const getTrackedTimePercentage = () => {
+    if (!stats) return 0;
+    const estimatedHours = stats.completedTasks * 2;
+    const weeklyHours = 168;
+    return Math.min(Math.round((estimatedHours / weeklyHours) * 100), 100);
+  };
+
+  const getHabitIntensity = (count: number) => {
+    if (count === 0) return 0;
+    if (count === 1) return 1;
+    if (count === 2) return 2;
+    if (count === 3) return 3;
+    return 4;
+  };
 
   if (loading) {
     return (
       <div className="flex items-center justify-center h-64">
         <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-purple-500"></div>
       </div>
-    )
+    );
+  }
+
+  if (!user) {
+    return (
+      <div className="flex items-center justify-center h-64">
+        <p className="text-gray-500 dark:text-gray-400">Please log in to view analytics</p>
+      </div>
+    );
   }
 
   return (
     <div>
       {/* Header */}
       <div className="mb-8">
-        <h1 className="text-3xl font-bold text-gray-900">Analysis</h1>
-        <p className="text-gray-600 mt-2">Track your progress and insights</p>
+        <h1 className="text-3xl font-bold text-gray-900 dark:text-white">
+          Analysis
+        </h1>
+        <p className="text-gray-600 dark:text-gray-400 mt-2">
+          Track your progress and insights
+        </p>
       </div>
 
       {/* Date Range Selector */}
-      <div className="bg-white p-4 rounded-lg shadow mb-6">
+      <div className="bg-white dark:bg-gray-800 p-4 rounded-lg shadow mb-6">
         <div className="flex space-x-4">
-          {['week', 'month', 'year'].map((range) => (
+          {["week", "month", "year"].map((range) => (
             <button
               key={range}
               onClick={() => setDateRange(range)}
-              className={`px-4 py-2 rounded-md font-medium capitalize ${
+              className={`px-4 py-2 rounded-md font-medium capitalize transition-colors ${
                 dateRange === range
-                  ? 'bg-purple-600 text-white'
-                  : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                  ? "bg-purple-600 text-white"
+                  : "bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-600"
               }`}
             >
               Past {range}
@@ -137,83 +316,122 @@ export default function AnalysisPage() {
 
       {/* Overview Stats */}
       <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
-        <div className="bg-white p-6 rounded-lg shadow">
-          <h3 className="text-sm font-medium text-gray-500 mb-2">Task Completion Rate</h3>
-          <p className="text-3xl font-bold text-green-600">{calculateCompletionRate()}%</p>
-          <p className="text-sm text-gray-600 mt-1">
-            {stats?.completedTasks} of {stats?.totalTasks} tasks
+        <div className="bg-white dark:bg-gray-800 p-6 rounded-lg shadow">
+          <h3 className="text-sm font-medium text-gray-500 dark:text-gray-400 mb-2">
+            Task Completion Rate
+          </h3>
+          <p className="text-3xl font-bold text-green-600 dark:text-green-400">
+            {calculateCompletionRate()}%
+          </p>
+          <p className="text-sm text-gray-600 dark:text-gray-400 mt-1">
+            {stats?.completedTasks || 0} of {stats?.totalTasks || 0} tasks
           </p>
         </div>
 
-        <div className="bg-white p-6 rounded-lg shadow">
-          <h3 className="text-sm font-medium text-gray-500 mb-2">Goal Success Rate</h3>
-          <p className="text-3xl font-bold text-blue-600">{calculateGoalSuccessRate()}%</p>
-          <p className="text-sm text-gray-600 mt-1">
-            {stats?.completedGoals} of {stats?.totalGoals} goals
+        <div className="bg-white dark:bg-gray-800 p-6 rounded-lg shadow">
+          <h3 className="text-sm font-medium text-gray-500 dark:text-gray-400 mb-2">
+            Goal Success Rate
+          </h3>
+          <p className="text-3xl font-bold text-blue-600 dark:text-blue-400">
+            {calculateGoalSuccessRate()}%
+          </p>
+          <p className="text-sm text-gray-600 dark:text-gray-400 mt-1">
+            {stats?.completedGoals || 0} of {stats?.totalGoals || 0} goals
           </p>
         </div>
 
-        <div className="bg-white p-6 rounded-lg shadow">
-          <h3 className="text-sm font-medium text-gray-500 mb-2">Active Habits</h3>
-          <p className="text-3xl font-bold text-purple-600">{stats?.totalHabits || 0}</p>
-          <p className="text-sm text-gray-600 mt-1">Daily habits tracked</p>
+        <div className="bg-white dark:bg-gray-800 p-6 rounded-lg shadow">
+          <h3 className="text-sm font-medium text-gray-500 dark:text-gray-400 mb-2">
+            Active Habits
+          </h3>
+          <p className="text-3xl font-bold text-purple-600 dark:text-purple-400">
+            {stats?.totalHabits || 0}
+          </p>
+          <p className="text-sm text-gray-600 dark:text-gray-400 mt-1">
+            Daily habits tracked
+          </p>
         </div>
 
-        <div className="bg-white p-6 rounded-lg shadow">
-          <h3 className="text-sm font-medium text-gray-500 mb-2">Pending Tasks</h3>
-          <p className="text-3xl font-bold text-orange-600">{stats?.pendingTasks || 0}</p>
-          <p className="text-sm text-gray-600 mt-1">Tasks to complete</p>
+        <div className="bg-white dark:bg-gray-800 p-6 rounded-lg shadow">
+          <h3 className="text-sm font-medium text-gray-500 dark:text-gray-400 mb-2">
+            Pending Tasks
+          </h3>
+          <p className="text-3xl font-bold text-orange-600 dark:text-orange-400">
+            {stats?.pendingTasks || 0}
+          </p>
+          <p className="text-sm text-gray-600 dark:text-gray-400 mt-1">
+            Tasks to complete
+          </p>
         </div>
       </div>
 
       {/* Charts Section */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         {/* Mood Distribution */}
-        <div className="bg-white p-6 rounded-lg shadow">
-          <h2 className="text-lg font-semibold mb-4">Mood Distribution</h2>
+        <div className="bg-white dark:bg-gray-800 p-6 rounded-lg shadow">
+        <h2 className="text-lg font-semibold mb-4 dark:text-white">
+            Mood Distribution
+          </h2>
           <div className="space-y-3">
-            {Object.entries(moodData).map(([mood, count]) => (
-              <div key={mood} className="flex items-center justify-between">
-                <div className="flex items-center space-x-2">
-                  <span className="capitalize">{mood}</span>
-                </div>
-                <div className="flex items-center space-x-2">
-                  <div className="w-32 bg-gray-200 rounded-full h-2">
-                    <div 
-                      className="bg-purple-600 h-2 rounded-full"
-                      style={{ 
-                        width: `${Object.values(moodData).length > 0 
-                          ? ((count as number) / Object.values(moodData).reduce((a: number, b: number) => a + b, 0)) * 100 
-                          : 0}%` 
-                      }}
-                    />
+            {Object.entries(moodData).length > 0 ? (
+              Object.entries(moodData).map(([mood, count]) => {
+                const total = Object.values(moodData).reduce(
+                  (a, b) => a + b,
+                  0
+                );
+                const percentage = total > 0 ? (count / total) * 100 : 0;
+                return (
+                  <div key={mood} className="flex items-center justify-between">
+                    <div className="flex items-center space-x-2">
+                      <span className="capitalize dark:text-gray-300">
+                        {mood}
+                      </span>
+                    </div>
+                    <div className="flex items-center space-x-2">
+                      <div className="w-32 bg-gray-200 dark:bg-gray-700 rounded-full h-2">
+                        <div
+                          className="bg-purple-600 dark:bg-purple-500 h-2 rounded-full"
+                          style={{ width: `${percentage}%` }}
+                        />
+                      </div>
+                      <span className="text-sm text-gray-600 dark:text-gray-400 w-12 text-right">
+                        {count}
+                      </span>
+                    </div>
                   </div>
-                  <span className="text-sm text-gray-600 w-12 text-right">{count as number}</span>
-                </div>
-              </div>
-            ))}
+                );
+              })
+            ) : (
+              <p className="text-gray-500 dark:text-gray-400">
+                No mood data available
+              </p>
+            )}
           </div>
         </div>
 
         {/* Weekly Progress */}
-        <div className="bg-white p-6 rounded-lg shadow">
-          <h2 className="text-lg font-semibold mb-4">Weekly Task Progress</h2>
+        <div className="bg-white dark:bg-gray-800 p-6 rounded-lg shadow">
+          <h2 className="text-lg font-semibold mb-4 dark:text-white">
+            Weekly Task Progress
+          </h2>
           <div className="space-y-3">
             {weeklyTaskData.map((day) => (
               <div key={day.day} className="flex items-center justify-between">
-                <span className="text-sm font-medium w-12">{day.day}</span>
+                <span className="text-sm font-medium w-12 dark:text-gray-300">
+                  {day.day}
+                </span>
                 <div className="flex-1 mx-4">
-                  <div className="w-full bg-gray-200 rounded-full h-4">
-                    <div 
-                      className="bg-green-500 h-4 rounded-full"
-                      style={{ 
-                        width: `${day.total > 0 ? (day.completed / day.total) * 100 : 0}%` 
+                  <div className="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-4">
+                    <div
+                      className="bg-green-500 dark:bg-green-400 h-4 rounded-full"
+                      style={{
+                        width: `${day.total > 0 ? (day.is_completed / day.total) * 100 : 0}%`,
                       }}
                     />
                   </div>
                 </div>
-                <span className="text-sm text-gray-600">
-                  {day.completed}/{day.total}
+                <span className="text-sm text-gray-600 dark:text-gray-400">
+                  {day.is_completed}/{day.total}
                 </span>
               </div>
             ))}
@@ -221,124 +439,162 @@ export default function AnalysisPage() {
         </div>
 
         {/* Goal Progress Timeline */}
-        <div className="bg-white p-6 rounded-lg shadow">
-          <h2 className="text-lg font-semibold mb-4">Goal Progress</h2>
+        <div className="bg-white dark:bg-gray-800 p-6 rounded-lg shadow">
+          <h2 className="text-lg font-semibold mb-4 dark:text-white">
+            Goal Progress
+          </h2>
           <div className="relative">
-            <div className="absolute left-4 top-0 bottom-0 w-0.5 bg-gray-200"></div>
-            {stats && stats.activeGoals > 0 ? (
+            <div className="absolute left-4 top-0 bottom-0 w-0.5 bg-gray-200 dark:bg-gray-700"></div>
+            {stats && stats.totalGoals > 0 ? (
               <div className="space-y-4">
-                {/* Placeholder for actual goals - would fetch from goalService */}
                 <div className="relative flex items-center">
-                  <div className="absolute left-4 w-2 h-2 bg-blue-600 rounded-full -translate-x-1/2"></div>
+                  <div className="absolute left-4 w-2 h-2 bg-blue-600 dark:bg-blue-400 rounded-full -translate-x-1/2"></div>
                   <div className="ml-10">
-                    <p className="font-medium">Active Goals</p>
-                    <p className="text-sm text-gray-600">{stats.activeGoals} in progress</p>
+                    <p className="font-medium dark:text-white">Active Goals</p>
+                    <p className="text-sm text-gray-600 dark:text-gray-400">
+                      {stats.activeGoals} in progress
+                    </p>
                   </div>
                 </div>
                 <div className="relative flex items-center">
-                  <div className="absolute left-4 w-2 h-2 bg-green-600 rounded-full -translate-x-1/2"></div>
+                  <div className="absolute left-4 w-2 h-2 bg-green-600 dark:bg-green-400 rounded-full -translate-x-1/2"></div>
                   <div className="ml-10">
-                    <p className="font-medium">Completed Goals</p>
-                    <p className="text-sm text-gray-600">{stats.completedGoals} achieved</p>
+                    <p className="font-medium dark:text-white">
+                      Completed Goals
+                    </p>
+                    <p className="text-sm text-gray-600 dark:text-gray-400">
+                      {stats.completedGoals} achieved
+                    </p>
                   </div>
                 </div>
               </div>
             ) : (
-              <p className="text-gray-500 ml-10">No goals tracked yet</p>
+              <p className="text-gray-500 dark:text-gray-400 ml-10">
+                No goals tracked yet
+              </p>
             )}
           </div>
         </div>
 
         {/* Habit Streak Calendar */}
-        <div className="bg-white p-6 rounded-lg shadow">
-          <h2 className="text-lg font-semibold mb-4">Habit Consistency</h2>
+        <div className="bg-white dark:bg-gray-800 p-6 rounded-lg shadow">
+          <h2 className="text-lg font-semibold mb-4 dark:text-white">
+            Habit Consistency
+          </h2>
           <div className="grid grid-cols-7 gap-1">
             {/* Calendar header */}
-            {['S', 'M', 'T', 'W', 'T', 'F', 'S'].map((day, index) => (
-              <div key={index} className="text-center text-xs text-gray-500 font-medium py-1">
+            {["S", "M", "T", "W", "T", "F", "S"].map((day, index) => (
+              <div
+                key={index}
+                className="text-center text-xs text-gray-500 dark:text-gray-400 font-medium py-1"
+              >
                 {day}
               </div>
             ))}
-            {/* Calendar days - placeholder data */}
-            {Array.from({ length: 35 }, (_, i) => {
-              const hasHabit = Math.random() > 0.3
-              const intensity = hasHabit ? Math.floor(Math.random() * 4) + 1 : 0
+            {/* Calendar days */}
+            {habitStreaks.map((streak, i) => {
+              const intensity = getHabitIntensity(streak.count);
+              const colorClasses = [
+                "bg-gray-100 dark:bg-gray-700",
+                "bg-green-200 dark:bg-green-900",
+                "bg-green-300 dark:bg-green-800",
+                "bg-green-400 dark:bg-green-700",
+                "bg-green-500 dark:bg-green-600",
+              ];
               return (
                 <div
                   key={i}
-                  className={`aspect-square rounded-sm ${
-                    intensity === 0 ? 'bg-gray-100' :
-                    intensity === 1 ? 'bg-green-200' :
-                    intensity === 2 ? 'bg-green-300' :
-                    intensity === 3 ? 'bg-green-400' :
-                    'bg-green-500'
-                  }`}
-                  title={`${intensity} habits completed`}
+                  className={`aspect-square rounded-sm ${colorClasses[intensity]}`}
+                  title={`${streak.count} habits completed on ${streak.date}`}
                 />
-              )
+              );
             })}
           </div>
-          <div className="mt-4 flex items-center justify-between text-xs text-gray-600">
+          <div className="mt-4 flex items-center justify-between text-xs text-gray-600 dark:text-gray-400">
             <span>Less</span>
             <div className="flex space-x-1">
-              {[100, 200, 300, 400, 500].map((shade) => (
-                <div key={shade} className={`w-3 h-3 rounded-sm bg-green-${shade}`} />
-              ))}
+              <div className="w-3 h-3 rounded-sm bg-gray-100 dark:bg-gray-700" />
+              <div className="w-3 h-3 rounded-sm bg-green-200 dark:bg-green-900" />
+              <div className="w-3 h-3 rounded-sm bg-green-300 dark:bg-green-800" />
+              <div className="w-3 h-3 rounded-sm bg-green-400 dark:bg-green-700" />
+              <div className="w-3 h-3 rounded-sm bg-green-500 dark:bg-green-600" />
             </div>
             <span>More</span>
           </div>
-          </div>
+        </div>
       </div>
 
       {/* Insights Section */}
-      <div className="mt-8 bg-gradient-to-r from-purple-500 to-pink-500 rounded-lg shadow-lg p-6 text-white">
+      <div className="mt-8 bg-gradient-to-r from-purple-500 to-pink-500 dark:from-purple-600 dark:to-pink-600 rounded-lg shadow-lg p-6 text-white">
         <h2 className="text-2xl font-bold mb-4">AI-Powered Insights</h2>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
           <div>
-            <h3 className="text-lg font-semibold mb-2">📈 Productivity Trends</h3>
+            <h3 className="text-lg font-semibold mb-2">
+              📈 Productivity Trends
+            </h3>
             <p className="text-purple-100">
-              Your task completion rate has improved by 15% this week. 
-              You&apos;re most productive on Wednesdays and Thursdays.
+              {stats && stats.completedTasks > 0
+                ? `You've completed ${stats.completedTasks} tasks. Your completion rate is ${calculateCompletionRate()}%.`
+                : "Start tracking tasks to see your productivity trends."}
             </p>
           </div>
           <div>
-            <h3 className="text-lg font-semibold mb-2">🎯 Goal Recommendations</h3>
+            <h3 className="text-lg font-semibold mb-2">
+              🎯 Goal Recommendations
+            </h3>
             <p className="text-purple-100">
-              Based on your progress, consider breaking down larger goals into 
-              smaller milestones for better tracking.
+              {stats && stats.activeGoals > 3
+                ? "You have multiple active goals. Consider focusing on 2-3 key goals for better results."
+                : "Set specific, measurable goals to track your progress effectively."}
             </p>
           </div>
           <div>
-            <h3 className="text-lg font-semibold mb-2">🧘 Well-being Analysis</h3>
+            <h3 className="text-lg font-semibold mb-2">
+              🧘 Well-being Analysis
+            </h3>
             <p className="text-purple-100">
-              Your mood has been consistently positive. Keep maintaining 
-              your current routine and habit consistency.
+              {Object.keys(moodData).length > 0
+                ? `You've tracked your mood ${Object.values(moodData).reduce((a, b) => a + b, 0)} times. Keep up the self-awareness!`
+                : "Start journaling to track your emotional well-being over time."}
             </p>
           </div>
           <div>
             <h3 className="text-lg font-semibold mb-2">💡 Next Steps</h3>
             <p className="text-purple-100">
-              Focus on completing your {stats?.pendingTasks || 0} pending tasks. 
-              Consider setting up reminders for better task management.
+              {stats?.pendingTasks && stats.pendingTasks > 0
+                ? `Focus on completing your ${stats.pendingTasks} pending tasks. Break them down if needed.`
+                : "Great job! All tasks completed. Time to set new challenges."}
             </p>
           </div>
         </div>
       </div>
 
       {/* Export Section */}
-      <div className="mt-8 bg-white p-6 rounded-lg shadow">
+      <div className="mt-8 bg-white dark:bg-gray-800 p-6 rounded-lg shadow">
         <div className="flex items-center justify-between">
           <div>
-            <h2 className="text-lg font-semibold">Export Your Data</h2>
-            <p className="text-gray-600 text-sm mt-1">
+            <h2 className="text-lg font-semibold dark:text-white">
+              Export Your Data
+            </h2>
+            <p className="text-gray-600 dark:text-gray-400 text-sm mt-1">
               Download your analytics data for the selected period
             </p>
           </div>
           <div className="flex space-x-3">
-            <button className="px-4 py-2 bg-gray-100 text-gray-700 rounded-md hover:bg-gray-200 font-medium">
+            <button
+              onClick={() => {
+                console.log("Exporting CSV...");
+              }}
+              className="px-4 py-2 bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 rounded-md hover:bg-gray-200 dark:hover:bg-gray-600 font-medium transition-colors"
+            >
               Export as CSV
             </button>
-            <button className="px-4 py-2 bg-purple-600 text-white rounded-md hover:bg-purple-700 font-medium">
+            <button
+              onClick={() => {
+                console.log("Generating PDF...");
+              }}
+              className="px-4 py-2 bg-purple-600 dark:bg-purple-500 text-white rounded-md hover:bg-purple-700 dark:hover:bg-purple-600 font-medium transition-colors"
+            >
               Generate PDF Report
             </button>
           </div>
@@ -348,57 +604,62 @@ export default function AnalysisPage() {
       {/* Detailed Breakdown */}
       <div className="mt-8 grid grid-cols-1 lg:grid-cols-3 gap-6">
         {/* Task Categories */}
-        <div className="bg-white p-6 rounded-lg shadow">
-          <h3 className="text-lg font-semibold mb-4">Task Categories</h3>
+        <div className="bg-white dark:bg-gray-800 p-6 rounded-lg shadow">
+          <h3 className="text-lg font-semibold mb-4 dark:text-white">
+            Task Categories
+          </h3>
           <div className="space-y-3">
-            <div className="flex justify-between items-center">
-              <span className="flex items-center">
-                <div className="w-3 h-3 bg-blue-500 rounded-full mr-2"></div>
-                Work
-              </span>
-              <span className="text-gray-600">45%</span>
-            </div>
-            <div className="flex justify-between items-center">
-              <span className="flex items-center">
-                <div className="w-3 h-3 bg-green-500 rounded-full mr-2"></div>
-                Personal
-              </span>
-              <span className="text-gray-600">30%</span>
-            </div>
-            <div className="flex justify-between items-center">
-              <span className="flex items-center">
-                <div className="w-3 h-3 bg-yellow-500 rounded-full mr-2"></div>
-                Health
-              </span>
-              <span className="text-gray-600">15%</span>
-            </div>
-            <div className="flex justify-between items-center">
-              <span className="flex items-center">
-                <div className="w-3 h-3 bg-purple-500 rounded-full mr-2"></div>
-                Learning
-              </span>
-              <span className="text-gray-600">10%</span>
-            </div>
+            {taskCategories.length > 0 ? (
+              taskCategories.map((category) => (
+                <div
+                  key={category.category}
+                  className="flex justify-between items-center"
+                >
+                  <span className="flex items-center">
+                    <div
+                      className={`w-3 h-3 rounded-full mr-2`}
+                      style={{ backgroundColor: `var(--color-${category.color}-500)` }}
+                    ></div>
+                    <span className="dark:text-gray-300">
+                      {category.category}
+                    </span>
+                  </span>
+                  <span className="text-gray-600 dark:text-gray-400">
+                    {category.percentage}%
+                  </span>
+                </div>
+              ))
+            ) : (
+              <p className="text-gray-500 dark:text-gray-400">
+                No task categories yet
+              </p>
+            )}
           </div>
         </div>
 
         {/* Time Management */}
-        <div className="bg-white p-6 rounded-lg shadow">
-          <h3 className="text-lg font-semibold mb-4">Time Distribution</h3>
+        <div className="bg-white dark:bg-gray-800 p-6 rounded-lg shadow">
+          <h3 className="text-lg font-semibold mb-4 dark:text-white">
+            Time Distribution
+          </h3>
           <div className="relative h-48">
             <div className="absolute inset-0 flex items-center justify-center">
               <div className="text-center">
-                <p className="text-3xl font-bold text-gray-900">168</p>
-                <p className="text-sm text-gray-600">hours/week</p>
+                <p className="text-3xl font-bold text-gray-900 dark:text-white">
+                  168
+                </p>
+                <p className="text-sm text-gray-600 dark:text-gray-400">
+                  hours/week
+                </p>
               </div>
             </div>
-            {/* Placeholder for circular progress */}
             <svg className="w-full h-full transform -rotate-90">
               <circle
                 cx="96"
                 cy="96"
                 r="80"
-                stroke="#e5e7eb"
+                stroke="currentColor"
+                className="text-gray-200 dark:text-gray-700"
                 strokeWidth="16"
                 fill="none"
               />
@@ -406,61 +667,103 @@ export default function AnalysisPage() {
                 cx="96"
                 cy="96"
                 r="80"
-                stroke="#8b5cf6"
+                stroke="currentColor"
+                className="text-purple-600 dark:text-purple-400"
                 strokeWidth="16"
                 fill="none"
-                strokeDasharray={`${2 * Math.PI * 80 * 0.3} ${2 * Math.PI * 80}`}
+                strokeDasharray={`${2 * Math.PI * 80 * (getTrackedTimePercentage() / 100)} ${2 * Math.PI * 80}`}
               />
             </svg>
           </div>
-          <div className="mt-4 text-center text-sm text-gray-600">
-            30% of time on tracked activities
+          <div className="mt-4 text-center text-sm text-gray-600 dark:text-gray-400">
+            {getTrackedTimePercentage()}% of time on tracked activities
           </div>
         </div>
 
         {/* Achievement Badges */}
-        <div className="bg-white p-6 rounded-lg shadow">
-          <h3 className="text-lg font-semibold mb-4">Recent Achievements</h3>
+        <div className="bg-white dark:bg-gray-800 p-6 rounded-lg shadow">
+          <h3 className="text-lg font-semibold mb-4 dark:text-white">
+            Recent Achievements
+          </h3>
           <div className="grid grid-cols-3 gap-3">
-            <div className="text-center">
-              <div className="w-12 h-12 bg-yellow-100 rounded-full flex items-center justify-center mx-auto mb-1">
+          <div className="text-center">
+              <div className="w-12 h-12 bg-yellow-100 dark:bg-yellow-900 rounded-full flex items-center justify-center mx-auto mb-1">
                 <span className="text-2xl">🏆</span>
               </div>
-              <p className="text-xs text-gray-600">Week Warrior</p>
+              <p className="text-xs text-gray-600 dark:text-gray-400">
+                Week Warrior
+              </p>
             </div>
             <div className="text-center">
-              <div className="w-12 h-12 bg-blue-100 rounded-full flex items-center justify-center mx-auto mb-1">
+              <div className="w-12 h-12 bg-blue-100 dark:bg-blue-900 rounded-full flex items-center justify-center mx-auto mb-1">
                 <span className="text-2xl">🎯</span>
               </div>
-              <p className="text-xs text-gray-600">Goal Getter</p>
+              <p className="text-xs text-gray-600 dark:text-gray-400">
+                Goal Getter
+              </p>
             </div>
             <div className="text-center">
-              <div className="w-12 h-12 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-1">
+              <div className="w-12 h-12 bg-green-100 dark:bg-green-900 rounded-full flex items-center justify-center mx-auto mb-1">
                 <span className="text-2xl">🔥</span>
               </div>
-              <p className="text-xs text-gray-600">7-Day Streak</p>
+              <p className="text-xs text-gray-600 dark:text-gray-400">
+                7-Day Streak
+              </p>
             </div>
             <div className="text-center opacity-50">
-              <div className="w-12 h-12 bg-gray-100 rounded-full flex items-center justify-center mx-auto mb-1">
+              <div className="w-12 h-12 bg-gray-100 dark:bg-gray-700 rounded-full flex items-center justify-center mx-auto mb-1">
                 <span className="text-2xl">🌟</span>
               </div>
-              <p className="text-xs text-gray-600">Locked</p>
+              <p className="text-xs text-gray-600 dark:text-gray-400">Locked</p>
             </div>
             <div className="text-center opacity-50">
-              <div className="w-12 h-12 bg-gray-100 rounded-full flex items-center justify-center mx-auto mb-1">
+              <div className="w-12 h-12 bg-gray-100 dark:bg-gray-700 rounded-full flex items-center justify-center mx-auto mb-1">
                 <span className="text-2xl">💎</span>
               </div>
-              <p className="text-xs text-gray-600">Locked</p>
+              <p className="text-xs text-gray-600 dark:text-gray-400">Locked</p>
             </div>
             <div className="text-center opacity-50">
-              <div className="w-12 h-12 bg-gray-100 rounded-full flex items-center justify-center mx-auto mb-1">
+              <div className="w-12 h-12 bg-gray-100 dark:bg-gray-700 rounded-full flex items-center justify-center mx-auto mb-1">
                 <span className="text-2xl">🚀</span>
               </div>
-              <p className="text-xs text-gray-600">Locked</p>
+              <p className="text-xs text-gray-600 dark:text-gray-400">Locked</p>
             </div>
           </div>
         </div>
       </div>
+
+      {/* Summary Statistics */}
+      <div className="mt-8 bg-gray-50 dark:bg-gray-900 rounded-lg p-6">
+        <h2 className="text-xl font-bold mb-4 dark:text-white">
+          Summary for {dateRange}
+        </h2>
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          <div className="text-center">
+            <p className="text-3xl font-bold text-purple-600 dark:text-purple-400">
+              {weeklyTaskData.reduce((sum, day) => sum + day.is_completed, 0)}
+            </p>
+            <p className="text-sm text-gray-600 dark:text-gray-400 mt-1">
+              Tasks Completed
+            </p>
+          </div>
+          <div className="text-center">
+            <p className="text-3xl font-bold text-green-600 dark:text-green-400">
+              {habitStreaks.filter((s) => s.count > 0).length}
+            </p>
+            <p className="text-sm text-gray-600 dark:text-gray-400 mt-1">
+              Days with Habits
+            </p>
+          </div>
+          <div className="text-center">
+            <p className="text-3xl font-bold text-blue-600 dark:text-blue-400">
+              {Object.values(moodData).reduce((sum, count) => sum + count, 0)}
+            </p>
+            <p className="text-sm text-gray-600 dark:text-gray-400 mt-1">
+              Journal Entries
+            </p>
+          </div>
+        </div>
+      </div>
     </div>
-  )
+  );
 }

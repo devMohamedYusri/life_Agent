@@ -102,6 +102,59 @@ export const userService={
     .single()
 
     return {data,error}
-   }
+   },
 
+  
+   async updateProfile(userId, updates) {
+    const { data, error } = await client
+      .from('profiles')
+      .update(updates)
+      .eq('id', userId)
+      .single()
+
+    if (error) throw error
+    return { data }
+  },
+
+  async deleteAccount(userId) {
+    // First delete all user data
+    const tables = ['tasks', 'goals', 'habits', 'journal_entries', 'notifications']
+    
+    for (const table of tables) {
+      await client
+        .from(table)
+        .delete()
+        .eq('user_id', userId)
+    }
+
+    // Delete profile
+    await client
+      .from('profiles')
+      .delete()
+      .eq('id', userId)
+
+    // Delete auth user
+    const { error } = await client.auth.admin.deleteUser(userId)
+    if (error) throw error
+  },
+
+  async getUserStats(userId) {
+    const [tasks, goals, habits] = await Promise.all([
+      client.from('tasks').select('*').eq('user_id', userId),
+      client.from('goals').select('*').eq('user_id', userId),
+      client.from('habits').select('*').eq('user_id', userId)
+    ])
+
+    const stats = {
+      totalTasks: tasks.data?.length || 0,
+      completedTasks: tasks.data?.filter(t => t.completed).length || 0,
+      pendingTasks: tasks.data?.filter(t => !t.completed).length || 0,
+      totalGoals: goals.data?.length || 0,
+      activeGoals: goals.data?.filter(g => g.status === 'active').length || 0,
+      completedGoals: goals.data?.filter(g => g.status === 'completed').length || 0,
+      totalHabits: habits.data?.length || 0
+    }
+
+    return { data: stats }
+  }
 }

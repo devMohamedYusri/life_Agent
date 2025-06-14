@@ -26,6 +26,6 @@
       "@api/*":["./src/app/api"]
     }
   },
-  "include": ["next-env.d.ts", "**/*.ts", "**/*.tsx", ".next/types/**/*.ts", "src/app/lib/supabase.js"],
+  "include": ["next-env.d.ts", "**/*.ts", "**/*.tsx", ".next/types/**/*.ts", "src/app/lib/supabase.js", "src/app/services/ai.js"],
   "exclude": ["node_modules"]
 }

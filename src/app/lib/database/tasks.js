@@ -110,7 +110,7 @@ export const taskService={
     //delete task
     async deleteTask(taskId){
         const {data,error}=await client
-        .from(tasks)
+        .from('tasks')
         .delete()
         .eq('task_id',taskId)
 

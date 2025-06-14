@@ -1,3 +1,4 @@
+// lib/database/habits.js
 import { client } from '../supabase'
 
 export const habitService = {
@@ -9,6 +10,20 @@ export const habitService = {
       return null
     }
     return user
+  },
+
+  // Helper function to format date consistently
+  formatDate(date) {
+    const d = new Date(date)
+    const year = d.getFullYear()
+    const month = String(d.getMonth() + 1).padStart(2, '0')
+    const day = String(d.getDate()).padStart(2, '0')
+    return `${year}-${month}-${day}`
+  },
+
+  // Helper function to get today's date in correct format
+  getTodayDate() {
+    return this.formatDate(new Date())
   },
 
   // Get all habits for user
@@ -55,28 +70,25 @@ export const habitService = {
       const startDate = new Date()
       startDate.setDate(startDate.getDate() - days)
 
-      // Use maybeSingle() instead of single() to avoid errors when no data exists
+      const startDateStr = this.formatDate(startDate)
+      const endDateStr = this.formatDate(endDate)
+
       const { data: completions, error: completionsError } = await client
         .from('habit_completions')
         .select('*')
         .eq('habit_id', habitId)
         .eq('user_id', userId)
-        .gte('completion_date', startDate.toISOString().split('T')[0])
-        .lte('completion_date', endDate.toISOString().split('T')[0])
+        .gte('completion_date', startDateStr)
+        .lte('completion_date', endDateStr)
         .order('completion_date', { ascending: false })
 
-      // If we get a 406 error, it's likely RLS - return empty completions array
-      if (completionsError && completionsError.code === '406') {
-        console.warn('RLS policy issue on habit_completions table. Returning empty completions.')
-        return { 
-          data: { ...habit, completions: [] }, 
-          error: null 
-        }
+      if (completionsError && completionsError.code !== '406') {
+        return { data: null, error: completionsError }
       }
 
       return { 
         data: { ...habit, completions: completions || [] }, 
-        error: completionsError 
+        error: null 
       }
     } catch (err) {
       console.error('Error fetching habit with completions:', err)
@@ -94,7 +106,8 @@ export const habitService = {
         .from('habits')
         .insert([{
           ...habitData,
-          user_id: habitData.user_id || user.id
+          user_id: habitData.user_id || user.id,
+          created_at: new Date().toISOString()
         }])
         .select(`
           *,
@@ -119,12 +132,13 @@ export const habitService = {
         .from('habits')
         .update(updates)
         .eq('habit_id', habitId)
+        .eq('user_id', user.id)
         .select(`
           *,
           category:categories(category_id, name, color, icon)
         `)
         .single()
-      
+
       return { data, error }
     } catch (err) {
       console.error('Error updating habit:', err)
@@ -132,16 +146,25 @@ export const habitService = {
     }
   },
 
-  // Delete habit
+  // Delete habit and all its completions
   async deleteHabit(habitId) {
     try {
       const user = await this.checkAuth()
       if (!user) return { data: null, error: 'User not authenticated' }
 
+      // Delete completions first (if RLS allows cascading delete, this might not be needed)
+      await client
+        .from('habit_completions')
+        .delete()
+        .eq('habit_id', habitId)
+        .eq('user_id', user.id)
+
+      // Then delete the habit
       const { data, error } = await client
         .from('habits')
         .delete()
         .eq('habit_id', habitId)
+        .eq('user_id', user.id)
       
       return { data, error }
     } catch (err) {
@@ -150,68 +173,150 @@ export const habitService = {
     }
   },
 
-  // Mark habit as completed for today
-  async completeHabitToday(habitId, userId, notes = null) {
+  // Get habit logs (completions) for a specific date range
+  async getHabitLogs(habitId, startDate, endDate) {
+    try {
+      // Validate inputs
+      if (!habitId) {
+        console.error('getHabitLogs called with undefined habitId')
+        return { data: [], error: 'Habit ID is required' }
+      }
+
+      const user = await this.checkAuth()
+      if (!user) {
+        console.error('getHabitLogs: User not authenticated')
+        return { data: [], error: 'User not authenticated' }
+      }
+
+      // Validate and format dates
+      const start = new Date(startDate)
+      const end = new Date(endDate)
+      const today = new Date()
+      
+      if (isNaN(start.getTime()) || isNaN(end.getTime())) {
+        console.error('Invalid dates provided to getHabitLogs:', { startDate, endDate })
+        return { data: [], error: 'Invalid date format' }
+      }
+      
+      // Ensure we're not querying future dates
+      if (start > today) {
+        startDate = this.formatDate(today)
+      }
+      if (end > today) {
+        endDate = this.formatDate(today)
+      }
+      const { data, error } = await client
+        .from('habit_completions')
+        .select('*')
+        .eq('habit_id', habitId)
+        .eq('user_id', user.id)
+        .gte('completion_date', startDate)
+        .lte('completion_date', endDate)
+        .order('completion_date', { ascending: false })
+      
+      if (error) {
+        console.error('Error fetching habit logs:', {
+          error,
+          params: { habitId, userId: user.id, startDate, endDate }
+        })
+        // Return empty array instead of throwing for 400/404 errors
+        if (error.code === '400' || error.code === '404' || error.code === '22P02') {
+          return { data: [], error: null }
+        }
+        return { data: [], error: error.message }
+      }
+
+      // Transform to expected format
+      const logs = (data || []).map(completion => ({
+        id: completion.id,
+        habit_id: completion.habit_id,
+        completed_date: completion.completion_date,
+        completed: completion.is_completed,
+        notes: completion.notes,
+        created_at: completion.completed_at
+      }))
+
+      return { data: logs, error: null }
+    } catch (error) {
+      console.error('Error in getHabitLogs:', error)
+      return { data: [], error: error.message }
+    }
+  },
+
+  // Log habit completion for a specific date
+  async logHabitCompletion(habitId, completedDate, completed = true, notes = '') {
     try {
       const user = await this.checkAuth()
       if (!user) return { data: null, error: 'User not authenticated' }
 
-      const today = new Date().toISOString().split('T')[0]
-      
-      const { data, error } = await client
+      // Check if a completion already exists for this date
+      const { data: existing } = await client
         .from('habit_completions')
-        .upsert([{
-          habit_id: habitId,
-          user_id: userId,
-          completion_date: today,
-          is_completed: true,
-          notes: notes,
-          completed_at: new Date().toISOString()
-        }], {
-          onConflict: 'habit_id,user_id,completion_date'
-        })
-        .select()
-        .single()
-      
-      // Handle 406 error specifically
-      if (error && error.code === '406') {
-        console.error('RLS policy issue. Make sure habit_completions table has proper RLS policies.')
-        return { data: null, error: 'Permission denied. Please contact support.' }
+        .select('*')
+        .eq('habit_id', habitId)
+        .eq('user_id', user.id)
+        .eq('completion_date', completedDate)
+        .maybeSingle()
+
+      if (existing) {
+        if (!completed) {
+          // If marking as not completed, delete the record
+          const { error } = await client
+            .from('habit_completions')
+            .delete()
+            .eq('id', existing.id)
+          
+          return { data: null, error }
+        } else {
+          // Update existing record
+          const { data, error } = await client
+            .from('habit_completions')
+            .update({
+              is_completed: completed,
+              notes: notes,
+              completed_at: new Date().toISOString()
+            })
+            .eq('id', existing.id)
+            .select()
+            .single()
+
+          return { data, error }
+        }
+      } else if (completed) {
+        // Create new record only if marking as completed
+        const { data, error } = await client
+          .from('habit_completions')
+          .insert({
+            habit_id: habitId,
+            user_id: user.id,
+            completion_date: completedDate,
+            is_completed: completed,
+            notes: notes,
+            completed_at: new Date().toISOString()
+          })
+          .select()
+          .single()
+
+        return { data, error }
       }
 
-      return { data, error }
+      return { data: null, error: null }
     } catch (err) {
-      console.error('Error completing habit:', err)
+      console.error('Error logging habit completion:', err)
       return { data: null, error: err.message }
     }
   },
 
+  // Mark habit as completed for today
+  async completeHabitToday(habitId, userId, notes = null) {
+    const today = this.getTodayDate()
+    return this.logHabitCompletion(habitId, today, true, notes)
+  },
+
   // Mark habit as not completed for today
   async uncompleteHabitToday(habitId, userId) {
-    try {
-      const user = await this.checkAuth()
-      if (!user) return { data: null, error: 'User not authenticated' }
-
-      const today = new Date().toISOString().split('T')[0]
-      
-      const { data, error } = await client
-        .from('habit_completions')
-        .delete()
-        .eq('habit_id', habitId)
-        .eq('user_id', userId)
-        .eq('completion_date', today)
-      
-      // Handle 406 error
-      if (error && error.code === '406') {
-        console.error('RLS policy issue. Make sure habit_completions table has proper RLS policies.')
-        return { data: null, error: 'Permission denied. Please contact support.' }
-      }
-
-      return { data, error }
-    } catch (err) {
-      console.error('Error uncompleting habit:', err)
-      return { data: null, error: err.message }
-    }
+    const today = this.getTodayDate()
+    return this.logHabitCompletion(habitId, today, false)
   },
 
   // Get habit completion status for today
@@ -220,7 +325,7 @@ export const habitService = {
       const user = await this.checkAuth()
       if (!user) return { data: null, error: 'User not authenticated' }
 
-      const today = new Date().toISOString().split('T')[0]
+      const today = this.getTodayDate()
       
       const { data, error } = await client
         .from('habit_completions')
@@ -228,12 +333,10 @@ export const habitService = {
         .eq('habit_id', habitId)
         .eq('user_id', userId)
         .eq('completion_date', today)
-        .maybeSingle() // Use maybeSingle() instead of single()
+        .maybeSingle()
       
-      // Handle 406 error
       if (error && error.code === '406') {
-        console.warn('RLS policy issue on habit_completions table.')
-        return { data: null, error: null } // Return null data instead of error
+        return { data: null, error: null }
       }
 
       return { data, error }
@@ -243,45 +346,64 @@ export const habitService = {
     }
   },
 
-  // Get habit streak
+  // Calculate current habit streak
   async getHabitStreak(habitId, userId) {
     try {
       const user = await this.checkAuth()
       if (!user) return { data: 0, error: 'User not authenticated' }
 
+      // Get last 365 days of completions
+      const endDate = new Date()
+      const startDate = new Date()
+      startDate.setDate(startDate.getDate() - 365)
+
       const { data, error } = await client
         .from('habit_completions')
-        .select('completion_date, is_completed')
+        .select('completion_date')
         .eq('habit_id', habitId)
         .eq('user_id', userId)
         .eq('is_completed', true)
+        .gte('completion_date', this.formatDate(startDate))
+        .lte('completion_date', this.formatDate(endDate))
         .order('completion_date', { ascending: false })
-        .limit(100)
 
-      // Handle 406 error
       if (error && error.code === '406') {
-        console.warn('RLS policy issue on habit_completions table.')
         return { data: 0, error: null }
       }
 
-      if (error) return { data: 0, error }
+      if (error || !data || data.length === 0) {
+        return { data: 0, error: error?.message || null }
+      }
 
-      if (!data || data.length === 0) return { data: 0, error: null }
-
+      // Calculate streak
       let streak = 0
-      const today = new Date()
-      today.setHours(0, 0, 0, 0)
-      
-      for (let i = 0; i < data.length; i++) {
-        const completionDate = new Date(data[i].completion_date)
-        completionDate.setHours(0, 0, 0, 0)
-        const expectedDate = new Date(today)
-        expectedDate.setDate(today.getDate() - i)
+      let currentDate = new Date()
+      currentDate.setHours(0, 0, 0, 0)
+
+      // Convert completion dates to a Set for O(1) lookup
+      const completionDates = new Set(data.map(d => d.completion_date))
+
+      // Count consecutive days from today backwards
+      while (completionDates.has(this.formatDate(currentDate))) {
+        streak++
+        currentDate.setDate(currentDate.getDate() - 1)
+      }
+
+      // If today isn't completed but yesterday is, check from yesterday
+      if (streak === 0) {
+        const yesterday = new Date()
+        yesterday.setDate(yesterday.getDate() - 1)
+        yesterday.setHours(0, 0, 0, 0)
         
-        if (completionDate.getTime() === expectedDate.getTime()) {
-          streak++
-        } else {
-          break
+        if (completionDates.has(this.formatDate(yesterday))) {
+          streak = 1
+          currentDate = new Date(yesterday)
+          currentDate.setDate(currentDate.getDate() - 1)
+          
+          while (completionDates.has(this.formatDate(currentDate))) {
+            streak++
+            currentDate.setDate(currentDate.getDate() - 1)
+          }
         }
       }
 
@@ -300,7 +422,10 @@ export const habitService = {
 
       const { data, error } = await client
         .from('habits')
-        .select('*')
+        .select(`
+          *,
+          category:categories(category_id, name, color, icon)
+        `)
         .eq('user_id', userId)
         .eq('category_id', categoryId)
         .order('created_at', { ascending: false })
@@ -327,16 +452,65 @@ export const habitService = {
         .lte('completion_date', endDate)
         .order('completion_date', { ascending: true })
       
-      // Handle 406 error
       if (error && error.code === '406') {
-        console.warn('RLS policy issue on habit_completions table.')
         return { data: [], error: null }
+      }
+
+      return { data: data || [], error }
+    } catch (err) {
+      console.error('Error fetching completion history:', err)
+      return { data: [], error: err.message }
+    }
+  },
+   // Add this new method for getting completions for a specific date
+   async getHabitCompletionForDate(habitId, userId, date) {
+    try {
+      const user = await this.checkAuth()
+      if (!user) return { data: null, error: 'User not authenticated' }
+      
+      const { data, error } = await client
+        .from('habit_completions')
+        .select('*')
+        .eq('habit_id', habitId)
+        .eq('user_id', userId)
+        .eq('completion_date', date)
+        .maybeSingle()
+      
+      if (error && error.code === '406') {
+        return { data: null, error: null }
       }
 
       return { data, error }
     } catch (err) {
-      console.error('Error fetching completion history:', err)
+      console.error('Error fetching habit completion for date:', err)
       return { data: null, error: err.message }
     }
-  }
+  },
+
+  // Add batch method to get all completions for multiple habits in a date range
+  async getBatchHabitCompletions(userId, startDate, endDate) {
+    try {
+      const user = await this.checkAuth()
+      if (!user) return { data: [], error: 'User not authenticated' }
+
+      const { data, error } = await client
+        .from('habit_completions')
+        .select('*')
+        .eq('user_id', userId)
+        .gte('completion_date', startDate)
+        .lte('completion_date', endDate)
+        .eq('is_completed', true)
+      
+      if (error && error.code !== '406') {
+        console.error('Error fetching batch completions:', error)
+        return { data: [], error: error.message }
+      }
+
+      return { data: data || [], error: null }
+    } catch (err) {
+      console.error('Error in getBatchHabitCompletions:', err)
+      return { data: [], error: err.message }
+    }
+  },
+
 }
