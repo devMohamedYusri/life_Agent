@@ -70,14 +70,14 @@ export default function AnalysisPage() {
         }
 
         // Load all data concurrently
-        const [{ data: allTasks, error: tasksError }, { data: goals, error: goalsError }, { data: habits, error: habitsError }] = await Promise.all([
+        const [{ data: allTasks }, { data: goals }, { data: habits }] = await Promise.all([
           taskService.getUserTasks(user.id),
           goalService.getUserGoals(user.id),
           habitService.getUserHabits(user.id),
         ]);
 
-        if (!goals) {
-          return <div>No goals found</div>;
+        if (!goals || !mounted) {
+          return;
         }
 
         // Calculate stats directly from tasks and goals
@@ -87,7 +87,7 @@ export default function AnalysisPage() {
           const pendingTasks = totalTasks - completedTasks;
 
           const totalGoals = goals.length;
-          const completedGoals = goals.filter(goal => goal.status === 'completed').length;
+          const completedGoals = goals.filter(goal => goal.status === "completed").length;
           const activeGoals = totalGoals - completedGoals;
 
           setStats({
@@ -102,17 +102,17 @@ export default function AnalysisPage() {
         }
 
         // Load mood statistics
-        const { data: moodStats, error: moodError } = await journalService.getMoodStats(
+        const { data: moodStats } = await journalService.getMoodStats(
           user.id,
           startDate.toISOString().split("T")[0],
           new Date().toISOString().split("T")[0]
         );
-        if (!moodError && moodStats && mounted) {
+        if (moodStats && mounted) {
           setMoodData(moodStats as MoodData);
         }
 
         // Calculate weekly task data
-        if (!tasksError && allTasks && mounted) {
+        if (allTasks && mounted) {
           const weekData: WeeklyTaskData[] = [];
           const days = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
 
@@ -163,7 +163,7 @@ export default function AnalysisPage() {
         }
 
         // Load habit streaks
-        if (!habitsError && habits && mounted) {
+        if (habits && mounted) {
           const streakData: HabitStreak[] = [];
           
           // Create date range for last 35 days
@@ -171,7 +171,7 @@ export default function AnalysisPage() {
           for (let i = 34; i >= 0; i--) {
             const date = new Date();
             date.setDate(date.getDate() - i);
-            dates.push(date.toISOString().split('T')[0]);
+            dates.push(date.toISOString().split("T")[0]);
           }
           
           if (habits.length > 0) {
@@ -179,10 +179,10 @@ export default function AnalysisPage() {
             const startDate = dates[0];
             const endDate = dates[dates.length - 1];
             
-            const { data: allCompletions, error: completionsError } = 
+            const { data: allCompletions } = 
               await habitService.getBatchHabitCompletions(user.id, startDate, endDate);
             
-            if (!completionsError && allCompletions && mounted) {
+            if (allCompletions && mounted) {
               // Create a map for quick lookup
               const completionMap = new Map<string, Set<string>>();
               
@@ -199,33 +199,14 @@ export default function AnalysisPage() {
                 const habitIdsCompleted = completionMap.get(dateStr);
                 streakData.push({
                   date: dateStr,
-                  count: habitIdsCompleted ? habitIdsCompleted.size : 0
+                  count: habitIdsCompleted?.size || 0
                 });
               });
-            } else {
-              // If error, fill with zeros
-              dates.forEach(dateStr => {
-                streakData.push({
-                  date: dateStr,
-                  count: 0
-                });
-              });
+              
+              setHabitStreaks(streakData);
             }
-          } else {
-            // No habits, fill with zeros
-            dates.forEach(dateStr => {
-              streakData.push({
-                date: dateStr,
-                count: 0
-              });
-            });
-          }
-          
-          if (mounted) {
-            setHabitStreaks(streakData);
           }
         }
-
       } catch (error) {
         console.error("Error loading analytics:", error);
       } finally {
@@ -237,7 +218,6 @@ export default function AnalysisPage() {
 
     loadAnalytics();
 
-    // Cleanup function
     return () => {
       mounted = false;
     };

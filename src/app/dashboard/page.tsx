@@ -1,7 +1,7 @@
 // app/dashboard/page.tsx
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { useAuthStore } from "../lib/stores/authStore";
 import { userService } from "../lib/database/users";
 import { taskService } from "../lib/database/tasks";
@@ -195,6 +195,7 @@ export default function DashboardHome() {
                   : 0}
                 %
               </div>
+
             </div>
             <TrendingUp className="w-8 h-8 text-green-500" />
           </div>

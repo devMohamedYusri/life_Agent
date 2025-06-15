@@ -1,16 +1,16 @@
 // app/lib/export.ts
 export const exportService = {
-    async exportToJSON(userId: string) {
+    async exportToJSON() {
       // Gather all user data
       // Format as JSON
       // Trigger download
     },
     
-    async exportToCSV(userId: string, entityType: string) {
+    async exportToCSV() {
       // Export specific entity type as CSV
     },
     
-    async importFromJSON(file: File, userId: string) {
+    async importFromJSON() {
       // Parse and validate JSON
       // Import data
     },

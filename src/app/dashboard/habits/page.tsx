@@ -71,9 +71,9 @@ export default function HabitsPage() {
     category_id: "",
   });
 
-  const loadHabits = async () => {
+  const loadHabits = useCallback(async () => {
     if (!user) {
-      console.error('User not authenticated');
+      console.error("User not authenticated");
       setLoading(false);
       return;
     }
@@ -82,17 +82,8 @@ export default function HabitsPage() {
       setLoading(true);
 
       // Load habits and categories
-      const { data: habitsData, error: habitsError } = await habitService.getUserHabits(user.id);
-      if (habitsError) {
-        console.error('Error loading habits:', habitsError);
-        return;
-      }
-
-      const { data: categoriesData, error: categoriesError } = await categoryService.getUserCategories(user.id);
-      if (categoriesError) {
-        console.error('Error loading categories:', categoriesError);
-        return;
-      }
+      const { data: habitsData } = await habitService.getUserHabits(user.id);
+      const { data: categoriesData } = await categoryService.getUserCategories(user.id);
 
       setHabits(habitsData || []);
       setCategories(categoriesData || []);
@@ -119,17 +110,17 @@ export default function HabitsPage() {
       }
       setHabitStats(stats);
     } catch (error) {
-      console.error('Error loading habits:', error);
+      console.error("Error loading habits:", error);
     } finally {
       setLoading(false);
     }
-  };
+  }, [user]);
 
   useEffect(() => {
     if (user) {
       loadHabits();
     }
-  }, [user]);
+  }, [user, loadHabits]);
 
   const handleHabitToggle = async (habitId: string) => {
     try {

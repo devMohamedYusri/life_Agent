@@ -136,33 +136,3 @@ function calculateDueDate(bestTime: string): string {
   // Implementation depends on format of bestTime
   return today.toISOString()
 }
-
-export async function generatePlan(
-  _planType: string,
-  _preferences: Record<string, unknown>,
-  _bestTime: string,
-  context: PlanContext
-): Promise<Plan> {
-  return {
-    tasks: [],
-    habits: [],
-    tips: [],
-    goalAlignment: [],
-    createdAt: new Date().toISOString()
-  }
-}
-
-export async function generateWeeklyPlan(
-  _planType: string,
-  _preferences: Record<string, unknown>,
-  _bestTime: string,
-  context: PlanContext
-): Promise<Plan> {
-  return {
-    tasks: [],
-    habits: [],
-    tips: [],
-    goalAlignment: [],
-    createdAt: new Date().toISOString()
-  }
-}

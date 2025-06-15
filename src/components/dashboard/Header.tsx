@@ -3,7 +3,7 @@
 
 import { useAuthStore } from "@//lib/stores/authStore"
 import { useRouter } from "next/navigation"
-import { useState, useEffect, Dispatch, SetStateAction } from "react"
+import { useState, useEffect, Dispatch, SetStateAction, useCallback } from "react"
 import { GlobalSearch } from "../GloabalSearch"
 import { notificationService, Notification } from "@//lib/database/notifications"
 import Link from "next/link"
@@ -26,6 +26,17 @@ export default function Header({ setSidebarOpen }: HeaderProps) {
     const [theme, setTheme] = useState<'light' | 'dark'>('light')
     const router = useRouter()
 
+    const loadNotifications = useCallback(async () => {
+        if (!user) return;
+        try {
+            const { data } = await notificationService.getUpcoming(user.id)
+            setNotifications(data || [])
+            setUnreadCount(data?.filter(n => n.status === 'pending').length || 0)
+        } catch (error) {
+            console.error('Error loading notifications:', error)
+        }
+    }, [user]);
+
     useEffect(() => {
         if (user) {
             loadNotifications()
@@ -34,17 +45,7 @@ export default function Header({ setSidebarOpen }: HeaderProps) {
             setTheme(savedTheme)
             document.documentElement.classList.toggle('dark', savedTheme === 'dark')
         }
-    }, [user])
-
-    const loadNotifications = async () => {
-        try {
-            const { data } = await notificationService.getUpcoming(user!.id)
-            setNotifications(data || [])
-            setUnreadCount(data?.filter(n => n.status === 'pending').length || 0)
-        } catch (error) {
-            console.error('Error loading notifications:', error)
-        }
-    }
+    }, [user, loadNotifications])
 
     const handleSignOut = async () => {
         await signOut()
@@ -61,11 +62,6 @@ export default function Header({ setSidebarOpen }: HeaderProps) {
     const markNotificationAsRead = async (notificationId: string) => {
         await notificationService.markAsRead(notificationId)
         loadNotifications()
-    }
-
-    const getInitials = (email: string) => {
-        const name = email.split('@')[0]
-        return name.charAt(0).toUpperCase() + (name.charAt(1) || '').toUpperCase()
     }
 
     return (

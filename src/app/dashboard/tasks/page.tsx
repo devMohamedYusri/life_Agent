@@ -23,13 +23,16 @@ interface Task {
   task_id: string
   title: string
   description: string
-  status: string
-  priority: string
+  status: TaskStatus
+  priority: TaskPriority
   due_date: string
   is_completed: boolean
   category?: { name: string; color: string; icon: string }
   goal?: { title: string }
 }
+
+type TaskStatus = "completed" | "pending" | "in_progress" | "cancelled"
+type TaskPriority = "medium" | "low" | "high" | "urgent"
 
 export default function TasksPage() {
   const { user } = useAuthStore()
@@ -49,15 +52,18 @@ export default function TasksPage() {
     title: '',
     description: '',
     due_date: '',
-    priority: 'medium',
+    priority: 'medium' as TaskPriority,
     category_id: '',
     goal_id: '',
-    status: 'pending'
+    status: 'pending' as TaskStatus
   })
 
   // Load data
   const loadData = useCallback(async () => {
-    if (!user?.id) return
+    if (!user?.id) {
+      setLoading(false)
+      return
+    }
     
     try {
       setLoading(true)
@@ -68,7 +74,9 @@ export default function TasksPage() {
         goalService.getUserGoals(user.id)
       ])
       
-      if (tasksResult.error) throw tasksResult.error
+      if (tasksResult.error) {
+        throw new Error(tasksResult.error.message)
+      }
       
       setTasks(tasksResult.data || [])
       setCategories(categoriesResult.data || [])
@@ -99,11 +107,13 @@ export default function TasksPage() {
       
       const { error } = await taskService.createTask(taskData)
       
-      if (!error) {
-        await loadData()
-        setShowCreateModal(false)
-        resetForm()
+      if (error) {
+        throw new Error(error.message)
       }
+      
+      await loadData()
+      setShowCreateModal(false)
+      resetForm()
     } catch (error) {
       console.error('Error creating task:', error)
     }
@@ -128,12 +138,14 @@ export default function TasksPage() {
       
       const { error } = await taskService.updateTask(editingTask.task_id, updates)
       
-      if (!error) {
-        await loadData()
-        setShowEditModal(false)
-        setEditingTask(null)
-        resetForm()
+      if (error) {
+        throw new Error(error.message)
       }
+      
+      await loadData()
+      setShowEditModal(false)
+      setEditingTask(null)
+      resetForm()
     } catch (error) {
       console.error('Error updating task:', error)
     }
@@ -161,10 +173,10 @@ export default function TasksPage() {
       title: '',
       description: '',
       due_date: '',
-      priority: 'medium',
+      priority: 'medium' as TaskPriority,
       category_id: '',
       goal_id: '',
-      status: 'pending'
+      status: 'pending' as TaskStatus
     })
   }
 
@@ -173,9 +185,14 @@ export default function TasksPage() {
     try {
       const updates = {
         is_completed: !isCompleted,
-        status: !isCompleted ? 'completed' : 'pending'
+        status: (!isCompleted ? "completed" : "pending") as TaskStatus
       }
-      await taskService.updateTask(taskId, updates)
+      const { error } = await taskService.updateTask(taskId, updates)
+      
+      if (error) {
+        throw new Error(error.message)
+      }
+      
       await loadData()
     } catch (error) {
       console.error('Error updating task:', error)
@@ -183,13 +200,18 @@ export default function TasksPage() {
   }
 
   // Quick status update
-  const updateTaskStatus = async (taskId: string, status: string) => {
+  const updateTaskStatus = async (taskId: string, status: TaskStatus) => {
     try {
       const updates = {
         status,
         is_completed: status === 'completed'
       }
-      await taskService.updateTask(taskId, updates)
+      const { error } = await taskService.updateTask(taskId, updates)
+      
+      if (error) {
+        throw new Error(error.message)
+      }
+      
       await loadData()
     } catch (error) {
       console.error('Error updating task status:', error)
@@ -216,7 +238,7 @@ export default function TasksPage() {
         title: `${task.title} (Copy)`,
         description: task.description,
         priority: task.priority,
-        status: 'pending',
+        status: "pending" as TaskStatus,
         due_date: task.due_date,
         category_id: null,
         goal_id: null
@@ -235,7 +257,7 @@ export default function TasksPage() {
     .filter(task => {
       if (filter === 'all') return true
       if (filter === 'pending') return task.status === 'pending'
-      if (filter === 'in-progress') return task.status === 'in-progress'
+      if (filter === 'in-progress') return task.status === 'in_progress'
       if (filter === 'completed') return task.status === 'completed'
       if (filter === 'today') {
         const today = new Date().toISOString().split('T')[0]
@@ -275,18 +297,18 @@ export default function TasksPage() {
   }
 
   // Get status icon and color
-  const getStatusInfo = (status: string) => {
+  const getStatusInfo = (status: TaskStatus) => {
     switch (status) {
-      case 'pending':
-        return { icon: <Clock className="w-4 h-4" />, color: 'text-gray-500' }
-      case 'in-progress':
-        return { icon: <PlayCircle className="w-4 h-4" />, color: 'text-blue-500' }
-      case 'completed':
-        return { icon: <CheckCircle className="w-4 h-4" />, color: 'text-green-500' }
-      case 'cancelled':
-        return { icon: <XCircle className="w-4 h-4" />, color: 'text-red-500' }
+      case "pending":
+        return { icon: <Clock className="w-4 h-4" />, color: "text-gray-500" }
+      case "in_progress":
+        return { icon: <PlayCircle className="w-4 h-4" />, color: "text-blue-500" }
+      case "completed":
+        return { icon: <CheckCircle className="w-4 h-4" />, color: "text-green-500" }
+      case "cancelled":
+        return { icon: <XCircle className="w-4 h-4" />, color: "text-red-500" }
       default:
-        return { icon: <AlertCircle className="w-4 h-4" />, color: 'text-gray-500' }
+        return { icon: <AlertCircle className="w-4 h-4" />, color: "text-gray-500" }
     }
   }
 
@@ -458,9 +480,9 @@ export default function TasksPage() {
                         <hr className="my-1 dark:border-gray-700" />
                         
                         {/* Quick status updates */}
-                        {task.status !== 'in-progress' && (
+                        {task.status !== 'in_progress' && (
                           <button
-                            onClick={() => updateTaskStatus(task.task_id, 'in-progress')}
+                            onClick={() => updateTaskStatus(task.task_id, 'in_progress')}
                             className="w-full text-left px-4 py-2 text-sm text-blue-600 hover:bg-gray-100 dark:hover:bg-gray-700 flex items-center"
                           >
                             <PlayCircle className="w-4 h-4 mr-2" />
@@ -541,11 +563,11 @@ export default function TasksPage() {
                   <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Status</label>
                   <select
                     value={formData.status}
-                    onChange={(e) => setFormData({ ...formData, status: e.target.value })}
+                    onChange={(e) => setFormData({ ...formData, status: e.target.value as TaskStatus })}
                     className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md focus:outline-none focus:ring-2 focus:ring-purple-500 dark:bg-gray-700 dark:text-white"
                   >
                     <option value="pending">Pending</option>
-                    <option value="in-progress">In Progress</option>
+                    <option value="in_progress">In Progress</option>
                     <option value="completed">Completed</option>
                     <option value="cancelled">Cancelled</option>
                   </select>
@@ -555,7 +577,7 @@ export default function TasksPage() {
                   <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Priority</label>
                   <select
                     value={formData.priority}
-                    onChange={(e) => setFormData({ ...formData, priority: e.target.value })}
+                    onChange={(e) => setFormData({ ...formData, priority: e.target.value as TaskPriority })}
                     className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md focus:outline-none focus:ring-2 focus:ring-purple-500 dark:bg-gray-700 dark:text-white"
                   >
                     <option value="low">Low</option>

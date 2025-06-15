@@ -11,6 +11,8 @@
   "dependencies": {
     "@ai-sdk/react": "^1.2.12",
     "@hookform/resolvers": "^5.1.0",
+    "@radix-ui/react-progress": "^1.1.7",
+    "@radix-ui/react-slot": "^1.2.3",
     "@supabase/auth-helpers-nextjs": "^0.10.0",
     "@supabase/supabase-js": "^2.50.0",
     "@types/lodash": "^4.17.17",
@@ -29,6 +31,7 @@
     "react-hook-form": "^7.57.0",
     "recharts": "^2.15.3",
     "resend": "^4.5.2",
+    "sonner": "^2.0.5",
     "tailwind-merge": "^3.3.1",
     "zod": "^3.25.56",
     "zustand": "^5.0.5"

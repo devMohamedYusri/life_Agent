@@ -1,7 +1,7 @@
 // app/dashboard/settings/page.tsx
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { useAuthStore } from '@//lib/stores/authStore'
 import { userService } from '@//lib/database/users'
 import { notificationService } from '@//lib/database/notifications'
@@ -74,13 +74,7 @@ export default function SettingsPage() {
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false)
   const [deleteConfirmText, setDeleteConfirmText] = useState('')
 
-  useEffect(() => {
-    if (user) {
-      loadUserData()
-    }
-  }, [user])
-
-  const loadUserData = async () => {
+  const loadUserData = useCallback(async () => {
     if (!user) return
     
     try {
@@ -108,7 +102,13 @@ export default function SettingsPage() {
     } catch (error) {
       console.error('Error loading user data:', error)
     }
-  }
+  }, [user]);
+
+  useEffect(() => {
+    if (user) {
+      loadUserData()
+    }
+  }, [user, loadUserData])
 
   const handleProfileUpdate = async () => {
     if (!user) return
@@ -453,9 +453,6 @@ export default function SettingsPage() {
               </div>
             )}
 
-            {/* Rest of the tabs remain the same... */}
-            {/* I'll include them for completeness */}
-
             {/* Appearance Tab */}
             {activeTab === 'appearance' && (
               <div className="space-y-6">
@@ -520,7 +517,7 @@ export default function SettingsPage() {
               </div>
             )}
 
-            {/* Security Tab remains the same */}
+            {/* Security Tab */}
             {activeTab === 'security' && (
               <div className="space-y-6">
                 <h2 className="text-xl font-semibold text-gray-900 dark:text-white">Security Settings</h2>

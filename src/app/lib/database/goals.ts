@@ -1,8 +1,11 @@
 import {client} from '../supabase'
+import { Database } from "../../../types/supabase"
+
+export type Goal = Database['public']['Tables']['goals']['Row']
 
 export const goalService={
     // get all goals for user
-    async getUserGoals(userId){
+    async getUserGoals(userId: string){
         const {data,error}=await client
         .from('goals')
         .select(`
@@ -19,7 +22,7 @@ export const goalService={
     
         //get goal with detailed status
 
-    async getGoalDetails(goalId){
+    async getGoalDetails(goalId: string){
         const {data,error}=await client
         .from('gaols')
         .select(`
@@ -36,7 +39,7 @@ export const goalService={
 
     //get goals by type
 
-    async getGoalsByType(userId,goalType){
+    async getGoalsByType(userId: string, goalType: string){
         const{data,error}=await client
         .from('goals')
         .select(`
@@ -52,7 +55,7 @@ export const goalService={
     },
 
     //get goal by category
-    async getGoalByCategory(userId,categoryId){
+    async getGoalByCategory(userId: string, categoryId: string){
         const {data,error}=await client
         .from('goals')
         .select(`
@@ -69,7 +72,7 @@ export const goalService={
 
 
     //get goals by status
-    async getGoalsByStatus(userId, status) {
+    async getGoalsByStatus(userId: string, status: string) {
         const { data, error } = await client
           .from('goals')
           .select(`
@@ -85,7 +88,7 @@ export const goalService={
       },
     //create new goal
 
-    async createGoal(goalData){
+    async createGoal(goalData: Partial<Goal>){
         const {data,error}=await client
         .from('goals')
         .insert(goalData)
@@ -100,7 +103,7 @@ export const goalService={
 
     //update goal
 
-    async updateGoal(goalId,updates){
+    async updateGoal(goalId: string, updates: Partial<Goal>){
         const {data,error}=await client
         .from('goals')
         .update(updates)
@@ -115,7 +118,7 @@ export const goalService={
     },
     //delete goal
 
-    async deleteGoal(goalId){
+    async deleteGoal(goalId: string){
         const {data,error}=await client
         .from('goals')
         .delete()
@@ -126,7 +129,7 @@ export const goalService={
 
     //update goal progress automaticly
 
-    async updateGoalProgress(goalId,progress){
+    async updateGoalProgress(goalId: string, progress: number){
         const {data,error}=await client
         .from('goals')
         .update({progress})
@@ -136,4 +139,18 @@ export const goalService={
 
         return {data,error}
        },
+
+    //get goal with tasks
+    async getGoalWithTasks(goalId: string){
+        const {data,error}=await client
+        .from('goals')
+        .select(`
+            *,
+            tasks:tasks(*)
+        `)
+        .eq('goal_id',goalId)
+        .single()
+
+        return {data,error}
+    }
 }

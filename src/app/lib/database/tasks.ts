@@ -1,8 +1,11 @@
 import {client} from "../supabase"
+import { Database } from "../../../types/supabase"
+
+export type Task = Database['public']['Tables']['tasks']['Row']
 
 export const taskService={
     //get all tasks for user
-    async getUserTasks(userId){
+    async getUserTasks(userId: string){
         const {data,error}=await client
         .from('tasks')
         .select(`
@@ -18,7 +21,7 @@ export const taskService={
 
     //get tasks by status
 
-    async getTasksByStatus(userId,status){
+    async getTasksByStatus(userId: string, status: string){
         const {data,error}=await client
         .from("tasks")
         .select(`
@@ -34,7 +37,7 @@ export const taskService={
 
     //get tasks ddue today
     // async getTasksDueToday(userId){
-      async getTasksDueToday(){
+      async getTasksDueToday(userId: string){
 
         const today=new Date().toISOString().split('T')[0]
         const tomorrow=new Date(Date.now()+24*60*60*1000).toISOString().split('T')[0]
@@ -46,7 +49,7 @@ export const taskService={
         category:categories(category_id, name, color, icon),
         goal:goals(goal_id, title)
       `)
-      .eq('user_id",user_id')
+      .eq('user_id',userId)
       .gte("due_date",today)
       .lt('due_date',tomorrow)
       .order('due_date',{ascending:true})
@@ -56,7 +59,7 @@ export const taskService={
 
     //get overdue tasks
 
-    async getOverdueTasks(userId){
+    async getOverdueTasks(userId: string){
         const today=new Date().toISOString().split('T')[0]
         const {data,error}=await client
         .from('tasks')
@@ -76,7 +79,7 @@ export const taskService={
 
 
     // create new task
-    async createTask(taskData){
+    async createTask(taskData: Partial<Task>){
         const {data,error}=await client
         .from('tasks')
         .insert(taskData)
@@ -91,7 +94,7 @@ export const taskService={
     },
 
     //update task
-    async updateTask(taskId,updates){
+    async updateTask(taskId: string, updates: Partial<Task>){
         const {data,error}=await client
         .from('tasks')
         .update(updates)
@@ -108,7 +111,7 @@ export const taskService={
 
 
     //delete task
-    async deleteTask(taskId){
+    async deleteTask(taskId: string){
         const {data,error}=await client
         .from('tasks')
         .delete()
@@ -118,7 +121,7 @@ export const taskService={
     },
 
     //mark as completed 
-    async completeTask(taskId){
+    async completeTask(taskId: string){
         const {data,error}=await client
         .from('tasks')
         .update({
@@ -135,7 +138,7 @@ export const taskService={
 
     //mark as incompleted
 
-    async uncompleteTask(taskId){
+    async uncompleteTask(taskId: string){
         const {data,error}=await client
         .from('tasks')
         .update({
@@ -151,7 +154,7 @@ export const taskService={
     },
 
     // get tasks by goal
-    async getTasksByGoal(goalId){
+    async getTasksByGoal(goalId: string){
         const {data,error}=await client
         .from("tasks")
         .select(`
@@ -167,7 +170,7 @@ export const taskService={
 
     //get tasks by category
 
-    async getTasksByCategory(taskId,categoryId){
+    async getTasksByCategory(taskId: string, categoryId: string){
         const {data,error}=await client
         .from('tasks')
         .select(`

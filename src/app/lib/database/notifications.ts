@@ -168,7 +168,7 @@ export const notificationService = {
   },
 
   // Schedule a task reminder
-  async scheduleTaskReminder(userId: string, taskId: string, task: any, reminderTime: Date) {
+  async scheduleTaskReminder(userId: string, taskId: string, task: Task, reminderTime: Date) {
     return this.create({
       user_id: userId,
       type: 'task_reminder',

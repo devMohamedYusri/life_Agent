@@ -13,17 +13,15 @@ import { debounce } from 'lodash'
 
 interface Task {
   task_id: string;
-  id?: string;
   title: string;
   description: string;
-  completed: boolean;
+  is_completed: boolean;
   priority: string;
   due_date: string;
 }
 
 interface Goal {
   goal_id: string;
-  id?: string;
   title: string;
   description: string;
   status: string;
@@ -32,7 +30,6 @@ interface Goal {
 
 interface Habit {
   habit_id: string;
-  id?: string;
   title?: string;
   name?: string;
   description: string;
@@ -40,7 +37,6 @@ interface Habit {
 
 interface JournalEntry {
   entry_id: string;
-  id?: string;
   content: string;
   mood: string;
   created_at?: string;
@@ -69,6 +65,12 @@ export function GlobalSearch() {
   const searchRef = useRef<HTMLDivElement>(null)
   const inputRef = useRef<HTMLInputElement>(null)
 
+  const handleResultClick = useCallback((result: SearchResult) => {
+    router.push(`/dashboard/${result.type}s`)
+    setIsOpen(false)
+    setQuery('')
+  }, [router, setIsOpen, setQuery]);
+
   // Close on click outside
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
@@ -79,7 +81,7 @@ export function GlobalSearch() {
 
     document.addEventListener('mousedown', handleClickOutside)
     return () => document.removeEventListener('mousedown', handleClickOutside)
-  }, [])
+  }, [setIsOpen])
 
   // Keyboard shortcuts
   useEffect(() => {
@@ -113,7 +115,7 @@ export function GlobalSearch() {
 
     document.addEventListener('keydown', handleKeyDown)
     return () => document.removeEventListener('keydown', handleKeyDown)
-  }, [isOpen, results, selectedIndex])
+  }, [isOpen, results, selectedIndex, handleResultClick])
 
   // Debounced search function
   const performSearch = useCallback(
@@ -139,11 +141,11 @@ export function GlobalSearch() {
             description.toLowerCase().includes(lowerQuery)
           ) {
             searchResults.push({
-              id: task.task_id || task.id || '',
+              id: task.task_id,
               title: title,
               type: 'task',
               description: description,
-              status: task.completed ? 'completed' : 'pending',
+              status: task.is_completed ? 'completed' : 'pending',
               priority: task.priority,
               date: task.due_date
             })
@@ -161,7 +163,7 @@ export function GlobalSearch() {
             description.toLowerCase().includes(lowerQuery)
           ) {
             searchResults.push({
-              id: goal.goal_id || goal.id || '',
+              id: goal.goal_id,
               title: title,
               type: 'goal',
               description: description,
@@ -182,7 +184,7 @@ export function GlobalSearch() {
             description.toLowerCase().includes(lowerQuery)
           ) {
             searchResults.push({
-              id: habit.habit_id || habit.id || '',
+              id: habit.habit_id,
               title: title,
               type: 'habit',
               description: description
@@ -197,7 +199,7 @@ export function GlobalSearch() {
           
           if (content.toLowerCase().includes(lowerQuery)) {
             searchResults.push({
-              id: entry.entry_id || entry.id || '',
+              id: entry.entry_id,
               title: `Journal Entry - ${new Date(entry.created_at || entry.entry_date || Date.now()).toLocaleDateString()}`,
               type: 'journal',
               description: content.substring(0, 100) + (content.length > 100 ? '...' : ''),
@@ -231,12 +233,6 @@ export function GlobalSearch() {
     }
   }, [query, performSearch])
 
-  const handleResultClick = (result: SearchResult) => {
-    router.push(`/dashboard/${result.type}s`)
-    setIsOpen(false)
-    setQuery('')
-  }
-
   const getIcon = (type: string) => {
     switch (type) {
       case 'task':
@@ -253,176 +249,133 @@ export function GlobalSearch() {
   }
 
   const getStatusColor = (result: SearchResult) => {
-    if (result.type === 'task' && result.priority === 'high') return 'text-red-600'
-    if (result.type === 'task' && result.priority === 'medium') return 'text-yellow-600'
-    if (result.status === 'completed') return 'text-green-600'
-    return 'text-gray-600'
+    switch (result.status) {
+      case 'completed':
+        return 'text-green-500'
+      case 'pending':
+        return 'text-yellow-500'
+      case 'active':
+        return 'text-blue-500'
+      default:
+        return 'text-gray-500'
+    }
+  }
+
+  const getPriorityColor = (priority?: string) => {
+    switch (priority) {
+      case 'high':
+        return 'text-red-500'
+      case 'medium':
+        return 'text-yellow-500'
+      case 'low':
+        return 'text-green-500'
+      default:
+        return 'text-gray-500'
+    }
+  }
+
+  const getMoodColor = (mood?: string) => {
+    switch (mood) {
+      case 'happy':
+        return 'text-yellow-500'
+      case 'sad':
+        return 'text-blue-500'
+      case 'angry':
+        return 'text-red-500'
+      case 'neutral':
+        return 'text-gray-500'
+      case 'excited':
+        return 'text-orange-500'
+      case 'stressed':
+        return 'text-purple-500'
+      default:
+        return 'text-gray-500'
+    }
   }
 
   return (
-    <div ref={searchRef} className="relative">
-      {/* Search Button */}
+    <div className="relative">
       <button
-        onClick={() => {
-          setIsOpen(true)
-          setTimeout(() => inputRef.current?.focus(), 0)
-        }}
-        className="flex items-center space-x-2 px-3 py-2 text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white bg-gray-100 dark:bg-gray-800 rounded-lg hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors"
+        onClick={() => setIsOpen(true)}
+        className="flex items-center space-x-2 px-4 py-2 rounded-md bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors"
       >
         <Search className="w-4 h-4" />
-        <span className="hidden sm:inline">Search...</span>
-        <kbd className="hidden sm:inline-flex items-center px-2 py-0.5 text-xs text-gray-500 bg-gray-200 dark:bg-gray-700 rounded">
-          ⌘K
-        </kbd>
+        <span>Quick Search...</span>
+        <span className="ml-auto text-xs opacity-75">⌘K</span>
       </button>
 
-          {/* Search Modal */}
-          {isOpen && (
-        <div className="absolute top-12 left-0 right-0 sm:left-auto sm:right-0 w-full sm:w-[600px] bg-white dark:bg-gray-800 rounded-lg shadow-2xl border border-gray-200 dark:border-gray-700 overflow-hidden z-50">
-          {/* Search Input */}
-          <div className="flex items-center border-b border-gray-200 dark:border-gray-700">
-            <Search className="w-5 h-5 text-gray-400 ml-4" />
-            <input
-              ref={inputRef}
-              type="text"
-              value={query}
-              onChange={(e) => setQuery(e.target.value)}
-              placeholder="Search tasks, goals, habits, and journal entries..."
-              className="flex-1 px-4 py-4 text-gray-900 dark:text-white bg-transparent outline-none placeholder-gray-400"
-              autoFocus
-            />
-            {query && (
-              <button
-                onClick={() => setQuery('')}
-                className="mr-4 p-1 hover:bg-gray-100 dark:hover:bg-gray-700 rounded"
-              >
-                <X className="w-4 h-4 text-gray-400" />
+      {isOpen && (
+        <div
+          ref={searchRef}
+          className="fixed inset-0 z-50 flex items-start justify-center p-4 sm:p-0 backdrop-blur-sm bg-black/50"
+        >
+          <div className="bg-white dark:bg-gray-900 rounded-lg shadow-xl w-full max-w-xl mt-16 transform transition-all duration-300 ease-out scale-95 opacity-0 animate-scale-in-out">
+            <div className="flex items-center border-b dark:border-gray-700 p-4">
+              <Search className="w-5 h-5 text-gray-500 dark:text-gray-400 mr-3" />
+              <input
+                ref={inputRef}
+                type="text"
+                placeholder="Search tasks, goals, habits, journal entries..."
+                className="flex-1 bg-transparent outline-none text-lg text-gray-900 dark:text-white placeholder-gray-400 dark:placeholder-gray-500"
+                value={query}
+                onChange={e => setQuery(e.target.value)}
+              />
+              {loading && <Clock className="w-5 h-5 animate-spin text-gray-500 dark:text-gray-400 ml-3" />}
+              <button onClick={() => setIsOpen(false)} className="ml-3 text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300">
+                <X className="w-5 h-5" />
               </button>
-            )}
-          </div>
-
-          {/* Search Results */}
-          <div className="max-h-[400px] overflow-y-auto">
-            {loading ? (
-              <div className="p-8 text-center">
-                <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-purple-500 mx-auto"></div>
-                <p className="mt-2 text-sm text-gray-500">Searching...</p>
-              </div>
-            ) : results.length > 0 ? (
-              <div className="py-2">
-                {results.map((result, index) => (
-                  <button
-                    key={`${result.type}-${result.id}`}
-                    onClick={() => handleResultClick(result)}
-                    onMouseEnter={() => setSelectedIndex(index)}
-                    className={`w-full px-4 py-3 flex items-start space-x-3 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors ${
-                      selectedIndex === index ? 'bg-gray-50 dark:bg-gray-700' : ''
-                    }`}
-                  >
-                    <div className={`mt-0.5 ${getStatusColor(result)}`}>
-                      {getIcon(result.type)}
-                    </div>
-                    <div className="flex-1 text-left">
-                      <div className="flex items-center justify-between">
-                        <p className="font-medium text-gray-900 dark:text-white">
-                          {result.title}
-                        </p>
-                        <span className="text-xs text-gray-500 capitalize">
-                          {result.type}
-                        </span>
-                      </div>
-                      <div className="text-sm text-gray-500 dark:text-gray-400">
-                        {result.type === 'task' && (
-                          <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200">
-                            {result.status === 'completed' ? 'Completed' : 'Pending'}
-                          </span>
-                        )}
-                        {result.type === 'goal' && (
-                          <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-purple-100 text-purple-800 dark:bg-purple-900 dark:text-purple-200">
-                            {result.status}
-                          </span>
-                        )}
-                        {result.type === 'habit' && (
-                          <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200">
-                            Habit
-                          </span>
-                        )}
-                        {result.type === 'journal' && (
-                          <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-200">
-                            Journal
-                          </span>
-                        )}
-                      </div>
-                      <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">
-                        {result.description}
-                      </p>
-                      <div className="flex items-center space-x-3 mt-1">
-                        {result.date && (
-                          <span className="text-xs text-gray-500 flex items-center">
-                            <Clock className="w-3 h-3 mr-1" />
-                            {new Date(result.date).toLocaleDateString()}
-                          </span>
-                        )}
-                        {result.priority && (
-                          <span className={`text-xs capitalize ${
-                            result.priority === 'high' ? 'text-red-600' :
-                            result.priority === 'medium' ? 'text-yellow-600' :
-                            'text-green-600'
-                          }`}>
-                            {result.priority} priority
-                          </span>
-                        )}
-                        {result.mood && (
-                          <span className="text-xs text-gray-500">
-                            Mood: {result.mood}
-                          </span>
-                        )}
-                      </div>
-                    </div>
-                    <ArrowRight className="w-4 h-4 text-gray-400 mt-0.5" />
-                  </button>
-                ))}
-              </div>
-            ) : query.length >= 2 ? (
-              <div className="p-8 text-center">
-                <p className="text-gray-500">No results found for "{query}"</p>
-                <p className="text-sm text-gray-400 mt-1">Try searching with different keywords</p>
-              </div>
-            ) : (
-              <div className="p-8 text-center">
-                <p className="text-gray-500">Start typing to search</p>
-                <div className="mt-4 flex flex-wrap justify-center gap-2">
-                  {['task', 'goal', 'habit', 'journal'].map(type => (
-                    <button
-                      key={type}
-                      onClick={() => setQuery(type)}
-                      className="px-3 py-1 text-xs bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-400 rounded-full hover:bg-gray-200 dark:hover:bg-gray-600"
-                    >
-                      Search {type}s
-                    </button>
-                  ))}
-                </div>
-              </div>
-            )}
-          </div>
-
-          {/* Footer */}
-          <div className="border-t border-gray-200 dark:border-gray-700 px-4 py-2 flex items-center justify-between text-xs text-gray-500">
-            <div className="flex items-center space-x-4">
-              <span className="flex items-center">
-                <kbd className="px-1.5 py-0.5 bg-gray-100 dark:bg-gray-700 rounded">↑↓</kbd>
-                <span className="ml-1">Navigate</span>
-              </span>
-              <span className="flex items-center">
-                <kbd className="px-1.5 py-0.5 bg-gray-100 dark:bg-gray-700 rounded">↵</kbd>
-                <span className="ml-1">Open</span>
-              </span>
-              <span className="flex items-center">
-                <kbd className="px-1.5 py-0.5 bg-gray-100 dark:bg-gray-700 rounded">esc</kbd>
-                <span className="ml-1">Close</span>
-              </span>
             </div>
-            <span>{results.length} results</span>
+
+            <div className="p-4 max-h-[400px] overflow-y-auto">
+              {query.length > 0 && results.length === 0 && !loading && (
+                <p className="text-center text-gray-500 dark:text-gray-400 py-8">No results found for &quot;{query}&quot;.</p>
+              )}
+
+              {query.length < 2 && !loading && (
+                <p className="text-center text-gray-500 dark:text-gray-400 py-8">Type at least 2 characters to search.</p>
+              )}
+
+              {results.map((result, index) => (
+                <div
+                  key={result.id}
+                  className={`flex items-center p-3 rounded-lg cursor-pointer ${selectedIndex === index ? 'bg-gray-100 dark:bg-gray-700' : 'hover:bg-gray-50 dark:hover:bg-gray-800'}`}
+                  onClick={() => handleResultClick(result)}
+                >
+                  <div className="flex-shrink-0 mr-3 text-gray-500 dark:text-gray-400">
+                    {getIcon(result.type)}
+                  </div>
+                  <div className="flex-1">
+                    <p className="font-medium text-gray-800 dark:text-gray-100">{result.title}</p>
+                    {result.description && (
+                      <p className="text-sm text-gray-600 dark:text-gray-400 line-clamp-1">{result.description}</p>
+                    )}
+                    <div className="text-xs mt-1 flex items-center space-x-2">
+                      {result.status && (
+                        <span className={`font-medium ${getStatusColor(result)}`}>
+                          {result.status.charAt(0).toUpperCase() + result.status.slice(1)}
+                        </span>
+                      )}
+                      {result.priority && (
+                        <span className={`font-medium ${getPriorityColor(result.priority)}`}>
+                          {result.priority.charAt(0).toUpperCase() + result.priority.slice(1)} Priority
+                        </span>
+                      )}
+                      {result.mood && (
+                        <span className={`font-medium ${getMoodColor(result.mood)}`}>
+                          Mood: {result.mood.charAt(0).toUpperCase() + result.mood.slice(1)}
+                        </span>
+                      )}
+                      {result.date && (
+                        <span className="text-gray-500 dark:text-gray-400">
+                          {new Date(result.date).toLocaleDateString()}
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                  <ArrowRight className="w-4 h-4 text-gray-400 ml-3" />
+                </div>
+              ))}
+            </div>
           </div>
         </div>
       )}

@@ -1,8 +1,11 @@
 import {client} from "../supabase"
+import { Database } from "../../../types/supabase"
+
+export type Category = Database['public']['Tables']['categories']['Row']
 
 export const categoryService = {
     // get all categories 
-    async getUserCategories(userId) {
+    async getUserCategories(userId: string) {
         const {data, error} = await client
             .from("categories")
             .select("*")
@@ -13,7 +16,7 @@ export const categoryService = {
     },
 
     // get category with usage stats
-    async getCategoryWithStats(userId, categoryId) {
+    async getCategoryWithStats(userId: string, categoryId: string) {
         const {data: category, error: categoryError} = await client
             .from("categories")
             .select("*")
@@ -52,7 +55,7 @@ export const categoryService = {
     },
 
     // create new category
-    async createCategory(categoryData) {
+    async createCategory(categoryData: Partial<Category>) {
         const {data, error} = await client
             .from("categories")
             .insert(categoryData)
@@ -63,7 +66,7 @@ export const categoryService = {
     },
 
     // update category
-    async updateCategory(categoryId, updates) {
+    async updateCategory(categoryId: string, updates: Partial<Category>) {
         const {data, error} = await client
             .from("categories")
             .update(updates)
@@ -75,7 +78,7 @@ export const categoryService = {
     },
 
     // delete category
-    async deleteCategory(categoryId) {
+    async deleteCategory(categoryId: string) {
         const {data, error} = await client
             .from('categories')
             .delete()
@@ -85,7 +88,7 @@ export const categoryService = {
     },
 
     // get categories with item counts
-    async getCategoriesWithCounts(userId) {
+    async getCategoriesWithCounts(userId: string) {
         const {data, error} = await client
             .from('categories')
             .select(`

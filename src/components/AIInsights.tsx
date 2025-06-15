@@ -1,7 +1,7 @@
 // app/components/AIInsights.tsx
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { Card, CardContent, CardHeader, CardTitle} from './ui/card'
 import { Brain, Sparkles, Heart } from 'lucide-react';
 import { aiService } from '@//lib/ai';
@@ -26,13 +26,7 @@ export function AIInsights() {
     loading: true
   });
 
-  useEffect(() => {
-    if (user) {
-      loadInsights();
-    }
-  }, [user]);
-
-  const loadInsights = async () => {
+  const loadInsights = useCallback(async () => {
     if (!user) return;
 
     try {
@@ -61,7 +55,13 @@ export function AIInsights() {
       console.error('Error loading insights:', error);
       setInsights(prev => ({ ...prev, loading: false }));
     }
-  };
+  }, [user]);
+
+  useEffect(() => {
+    if (user) {
+      loadInsights();
+    }
+  }, [user, loadInsights]);
 
   if (insights.loading) {
     return (
