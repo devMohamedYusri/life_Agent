@@ -13,5 +13,9 @@ export const exportService = {
     async importFromJSON(file: File, userId: string) {
       // Parse and validate JSON
       // Import data
+    },
+
+    async exportToPDF() {
+      // Implementation
     }
   }

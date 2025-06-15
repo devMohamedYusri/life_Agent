@@ -5,6 +5,21 @@ interface CustomNotificationOptions extends NotificationOptions {
   vibrate?: number[];
 }
 
+interface NotificationPayload {
+  id: string;
+  user_id: string;
+  type: 'task_reminder' | 'habit_reminder' | 'goal_deadline' | 'achievement' | 'general';
+  entity_id?: string;
+  entity_type?: 'task' | 'goal' | 'habit';
+  title: string;
+  message: string;
+  scheduled_for?: string;
+  status: 'pending' | 'sent' | 'read';
+  read_at?: string;
+  created_at: string;
+  metadata?: Record<string, unknown>;
+}
+
 export interface Notification {
   id: string
   user_id: string
@@ -334,4 +349,22 @@ export const NotificationManager = {
       return 0
     }
   }
+}
+
+export async function createNotification(notification: NotificationPayload) {
+  let data: NotificationPayload;
+  try {
+    const { data: result, error } = await client
+      .from('notifications')
+      .insert(notification)
+      .select()
+      .single()
+    
+    if (error) throw error
+    data = result
+  } catch (error) {
+    console.error('Error creating notification:', error)
+    throw error
+  }
+  return data
 }

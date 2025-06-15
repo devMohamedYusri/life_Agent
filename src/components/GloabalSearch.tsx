@@ -218,8 +218,17 @@ export function GlobalSearch() {
     }, 300),
     [user]
   )
+
   useEffect(() => {
-    performSearch(query)
+    if (query.length > 2) {
+      const timeoutId = setTimeout(() => {
+        performSearch(query)
+      }, 300)
+
+      return () => clearTimeout(timeoutId)
+    } else {
+      setResults([])
+    }
   }, [query, performSearch])
 
   const handleResultClick = (result: SearchResult) => {
@@ -322,11 +331,31 @@ export function GlobalSearch() {
                           {result.type}
                         </span>
                       </div>
-                      {result.description && (
-                        <p className="text-sm text-gray-600 dark:text-gray-400 mt-1 line-clamp-1">
-                          {result.description}
-                        </p>
-                      )}
+                      <div className="text-sm text-gray-500 dark:text-gray-400">
+                        {result.type === 'task' && (
+                          <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200">
+                            {result.status === 'completed' ? 'Completed' : 'Pending'}
+                          </span>
+                        )}
+                        {result.type === 'goal' && (
+                          <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-purple-100 text-purple-800 dark:bg-purple-900 dark:text-purple-200">
+                            {result.status}
+                          </span>
+                        )}
+                        {result.type === 'habit' && (
+                          <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200">
+                            Habit
+                          </span>
+                        )}
+                        {result.type === 'journal' && (
+                          <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-200">
+                            Journal
+                          </span>
+                        )}
+                      </div>
+                      <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">
+                        {result.description}
+                      </p>
                       <div className="flex items-center space-x-3 mt-1">
                         {result.date && (
                           <span className="text-xs text-gray-500 flex items-center">
@@ -341,13 +370,6 @@ export function GlobalSearch() {
                             'text-green-600'
                           }`}>
                             {result.priority} priority
-                          </span>
-                        )}
-                        {result.status && (
-                          <span className={`text-xs capitalize ${
-                            result.status === 'completed' ? 'text-green-600' : 'text-gray-500'
-                          }`}>
-                            {result.status}
                           </span>
                         )}
                         {result.mood && (

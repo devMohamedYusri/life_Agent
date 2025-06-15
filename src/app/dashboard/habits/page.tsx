@@ -16,33 +16,12 @@ import {
   Bell,
   MoreVertical,
 } from "lucide-react";
-
-interface Habit {
-  habit_id: string;
-  title: string;
-  description: string;
-  reminder_time: string | null;
-  frequency: 'daily' | 'weekly' | 'monthly';
-  target_count: number;
-  category?: {
-    category_id: string;
-    name: string;
-    color: string;
-    icon: string;
-  };
-  created_at?: string;
-}
+import { Habit, HabitCompletion } from "@//lib/database/habits";
 
 interface HabitStats {
-  currentStreak: number;
-  longestStreak: number;
-  totalCompletions: number;
+  completionCount: number;
+  streak: number;
   completionRate: number;
-  lastCompleted?: string;
-  last7Days: {
-    date: string;
-    completed: boolean;
-  }[];
 }
 
 interface Category {
@@ -74,12 +53,8 @@ export default function HabitsPage() {
   const { user } = useAuthStore();
   const [habits, setHabits] = useState<Habit[]>([]);
   const [categories, setCategories] = useState<Category[]>([]);
-  const [completions, setCompletions] = useState<{ [key: string]: boolean }>(
-    {}
-  );
-  const [habitStats, setHabitStats] = useState<{ [key: string]: HabitStats }>(
-    {}
-  );
+  const [completions, setCompletions] = useState<{ [key: string]: boolean }>({});
+  const [habitStats, setHabitStats] = useState<{ [key: string]: HabitStats }>({});
   const [loading, setLoading] = useState(true);
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [showEditModal, setShowEditModal] = useState(false);
@@ -96,147 +71,7 @@ export default function HabitsPage() {
     category_id: "",
   });
 
-  const calculateHabitStats = async (
-    habitId: string,
-    createdAt: string
-  ): Promise<HabitStats> => {
-    try {
-      // Get logs for the last 90 days to calculate stats
-      const endDate = new Date();
-      const startDate = new Date();
-      startDate.setDate(startDate.getDate() - 90);
-
-      const { data: logs } = await habitService.getHabitLogs(
-        habitId,
-        startDate.toISOString().split("T")[0],
-        endDate.toISOString().split("T")[0]
-      );
-
-      if (!logs || logs.length === 0) {
-        // Return empty stats with last 7 days structure
-        const last7Days = [];
-        for (let i = 6; i >= 0; i--) {
-          const date = new Date();
-          date.setDate(date.getDate() - i);
-          last7Days.push({
-            date: date.toISOString().split("T")[0],
-            completed: false,
-          });
-        }
-
-        return {
-          currentStreak: 0,
-          longestStreak: 0,
-          totalCompletions: 0,
-          completionRate: 0,
-          last7Days,
-        };
-      }
-
-      // Create a map of completed dates
-      const completedDates = new Set(
-        logs.filter((log: HabitLog) => log.completed)
-           .map((log: HabitLog) => log.completed_date)
-      );
-
-      // Calculate current streak
-      let currentStreak = 0;
-      let checkDate = new Date();
-      while (currentStreak < 90) {
-        const dateStr = checkDate.toISOString().split("T")[0];
-        if (completedDates.has(dateStr)) {
-          currentStreak++;
-          checkDate.setDate(checkDate.getDate() - 1);
-        } else {
-          break;
-        }
-      }
-
-      // Calculate longest streak
-      let longestStreak = 0;
-      let tempStreak = 0;
-      const sortedDates = Array.from(completedDates).sort();
-
-      for (let i = 0; i < sortedDates.length; i++) {
-        if (i === 0) {
-          tempStreak = 1;
-        } else {
-          const prevDate = new Date(sortedDates[i - 1] as string);
-          const currDate = new Date(sortedDates[i] as string);
-          const dayDiff =
-            (currDate.getTime() - prevDate.getTime()) / (1000 * 60 * 60 * 24);
-
-          if (dayDiff === 1) {
-            tempStreak++;
-          } else {
-            longestStreak = Math.max(longestStreak, tempStreak);
-            tempStreak = 1;
-          }
-        }
-      }
-      longestStreak = Math.max(longestStreak, tempStreak);
-
-      // Calculate completion rate
-      const habitCreatedDate = new Date(createdAt);
-      const daysSinceCreation = Math.floor(
-        (endDate.getTime() - habitCreatedDate.getTime()) / (1000 * 60 * 60 * 24)
-      );
-      const expectedCompletions = Math.min(daysSinceCreation, 90);
-      const completionRate =
-        expectedCompletions > 0
-          ? Math.round((completedDates.size / expectedCompletions) * 100)
-          : 0;
-
-      // Get last 7 days data
-      const last7Days = [];
-      for (let i = 6; i >= 0; i--) {
-        const date = new Date();
-        date.setDate(date.getDate() - i);
-        const dateStr = date.toISOString().split("T")[0];
-        last7Days.push({
-          date: dateStr,
-          completed: completedDates.has(dateStr),
-        });
-      }
-
-      // Get last completed date
-      const lastCompleted =
-        sortedDates.length > 0
-          ? sortedDates[sortedDates.length - 1]
-          : undefined;
-
-      return {
-        currentStreak,
-        longestStreak,
-        totalCompletions: completedDates.size,
-        completionRate,
-        lastCompleted: lastCompleted as string | undefined,
-        last7Days,
-      };
-    } catch (error) {
-      console.error("Error calculating habit stats:", error);
-      // Return default stats on error
-      const last7Days = [];
-      for (let i = 6; i >= 0; i--) {
-        const date = new Date();
-        date.setDate(date.getDate() - i);
-        last7Days.push({
-          date: date.toISOString().split("T")[0],
-          completed: false,
-        });
-      }
-
-      return {
-        currentStreak: 0,
-        longestStreak: 0,
-        totalCompletions: 0,
-        completionRate: 0,
-        last7Days,
-      };
-    }
-  };
-
-  const loadData = useCallback(async () => {
+  const loadHabits = async () => {
     if (!user) {
       console.error('User not authenticated');
       setLoading(false);
@@ -247,70 +82,146 @@ export default function HabitsPage() {
       setLoading(true);
 
       // Load habits and categories
-      const [habitsResult, categoriesResult] = await Promise.all([
-        habitService.getUserHabits(user.id),
-        categoryService.getUserCategories(user.id),
-      ]);
-
-      if (habitsResult.error) {
-        console.error('Error loading habits:', habitsResult.error);
+      const { data: habitsData, error: habitsError } = await habitService.getUserHabits(user.id);
+      if (habitsError) {
+        console.error('Error loading habits:', habitsError);
         return;
       }
 
-      if (categoriesResult.error) {
-        console.error('Error loading categories:', categoriesResult.error);
+      const { data: categoriesData, error: categoriesError } = await categoryService.getUserCategories(user.id);
+      if (categoriesError) {
+        console.error('Error loading categories:', categoriesError);
         return;
       }
 
-      const habitsData = habitsResult.data || [];
-      setHabits(habitsData);
-      setCategories(categoriesResult.data || []);
+      setHabits(habitsData || []);
+      setCategories(categoriesData || []);
 
-      // Check today's completions and load stats
-      const todayCompletions: { [key: string]: boolean } = {};
+      // Get today's date range
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+      const tomorrow = new Date(today);
+      tomorrow.setDate(tomorrow.getDate() + 1);
+
+      const { data: completionsData } = await habitService.getHabitCompletions(
+        user.id,
+        today.toISOString(),
+        tomorrow.toISOString()
+      );
+
+      const completedHabits = completionsData?.map(c => c.habit_id) || [];
+      setCompletions(completedHabits.reduce((acc, id) => ({ ...acc, [id]: true }), {}));
+
+      // Calculate stats
       const stats: { [key: string]: HabitStats } = {};
-      const today = new Date().toISOString().split("T")[0];
-
-      for (const habit of habitsData) {
-        try {
-          // Check if completed today
-          const { data: todayLogs, error: logsError } = await habitService.getHabitLogs(
-            habit.habit_id,
-            today,
-            today
-          );
-
-          if (logsError) {
-            console.error(`Error loading logs for habit ${habit.habit_id}:`, logsError);
-            continue;
-          }
-
-          todayCompletions[habit.habit_id] =
-            (todayLogs && todayLogs.length > 0 && todayLogs[0].completed) ||
-            false;
-
-          // Calculate real stats
-          stats[habit.habit_id] = await calculateHabitStats(
-            habit.habit_id,
-            habit.created_at || new Date().toISOString()
-          );
-        } catch (error) {
-          console.error(`Error processing habit ${habit.habit_id}:`, error);
-        }
+      for (const habit of habitsData || []) {
+        stats[habit.habit_id] = await calculateHabitStats(habit.habit_id);
       }
-
-      setCompletions(todayCompletions);
       setHabitStats(stats);
     } catch (error) {
-      console.error("Error loading data:", error);
+      console.error('Error loading habits:', error);
     } finally {
       setLoading(false);
     }
-  }, [user]);
+  };
 
   useEffect(() => {
-    loadData();
-  }, [loadData]);
+    if (user) {
+      loadHabits();
+    }
+  }, [user]);
+
+  const handleHabitToggle = async (habitId: string) => {
+    try {
+      const isCompleted = completions[habitId];
+      if (isCompleted) {
+        // Get today's completions to find the completion to delete
+        const today = new Date();
+        today.setHours(0, 0, 0, 0);
+        const tomorrow = new Date(today);
+        tomorrow.setDate(tomorrow.getDate() + 1);
+
+        const { data: todayCompletions } = await habitService.getHabitCompletions(
+          user.id,
+          today.toISOString(),
+          tomorrow.toISOString()
+        );
+
+        const completion = todayCompletions?.find(c => c.habit_id === habitId);
+        if (completion) {
+          await habitService.deleteHabitCompletion(completion.completion_id);
+        }
+      } else {
+        await habitService.completeHabit({
+          user_id: user.id,
+          habit_id: habitId
+        });
+      }
+      await loadHabits();
+    } catch (error) {
+      console.error('Error toggling habit:', error);
+    }
+  };
+
+  const calculateHabitStats = async (habitId: string): Promise<HabitStats> => {
+    try {
+      // Get completions for the last 30 days
+      const thirtyDaysAgo = new Date();
+      thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
+      
+      const { data: completions } = await habitService.getHabitCompletions(
+        user.id,
+        thirtyDaysAgo.toISOString(),
+        new Date().toISOString()
+      );
+
+      const habitCompletions = completions?.filter(c => c.habit_id === habitId) || [];
+      const completionCount = habitCompletions.length;
+      const streak = calculateStreak(habitCompletions);
+      const completionRate = (completionCount / 30) * 100;
+
+      return {
+        completionCount,
+        streak,
+        completionRate
+      };
+    } catch (error) {
+      console.error('Error calculating habit stats:', error);
+      return {
+        completionCount: 0,
+        streak: 0,
+        completionRate: 0
+      };
+    }
+  };
+
+  const calculateStreak = (completions: HabitCompletion[]): number => {
+    if (!completions.length) return 0;
+
+    const sortedCompletions = completions.sort((a, b) => 
+      new Date(b.completion_date).getTime() - new Date(a.completion_date).getTime()
+    );
+
+    let streak = 1;
+    let currentDate = new Date(sortedCompletions[0].completion_date);
+    currentDate.setHours(0, 0, 0, 0);
+
+    for (let i = 1; i < sortedCompletions.length; i++) {
+      const completionDate = new Date(sortedCompletions[i].completion_date);
+      completionDate.setHours(0, 0, 0, 0);
+
+      const diffDays = Math.floor((currentDate.getTime() - completionDate.getTime()) / (1000 * 60 * 60 * 24));
+      
+      if (diffDays === 1) {
+        streak++;
+        currentDate = completionDate;
+      } else {
+        break;
+      }
+    }
+
+    return streak;
+  };
 
   const handleCreateHabit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -327,7 +238,7 @@ export default function HabitsPage() {
       const { error } = await habitService.createHabit(habitData);
 
       if (!error) {
-        await loadData();
+        await loadHabits();
         setShowCreateModal(false);
         resetForm();
       } else {
@@ -359,7 +270,7 @@ export default function HabitsPage() {
       );
 
       if (!error) {
-        await loadData();
+        await loadHabits();
         setShowEditModal(false);
         setEditingHabit(null);
         resetForm();
@@ -380,7 +291,7 @@ export default function HabitsPage() {
       reminder_time: habit.reminder_time || "",
       frequency: habit.frequency,
       target_count: habit.target_count,
-      category_id: habit.category?.category_id || "",
+      category_id: habit.category_id || "",
     });
     setShowEditModal(true);
     setShowHabitMenu(null);
@@ -397,38 +308,6 @@ export default function HabitsPage() {
     });
   };
 
-  const toggleHabitCompletion = async (habitId: string) => {
-    if (!user) return;
-
-    try {
-      const today = new Date().toISOString().split("T")[0];
-      const isCompleted = completions[habitId];
-
-      if (isCompleted) {
-        // Find today's log and delete it
-        const { data: todayLogs } = await habitService.getHabitLogs(
-          habitId,
-          today,
-          today
-        );
-        if (todayLogs && todayLogs.length > 0) {
-          // You would need to add a deleteHabitLog method to your service
-          // For now, we'll update the completion status to false
-          await habitService.logHabitCompletion(habitId, today, false, user.id);
-        }
-      } else {
-        // Log completion for today
-        await habitService.logHabitCompletion(habitId, today, true, user.id);
-      }
-
-      // Reload data to ensure consistency
-      await loadData();
-    } catch (error) {
-      console.error("Error toggling habit completion:", error);
-      alert("An unexpected error occurred. Please try again.");
-    }
-  };
-
   const deleteHabit = async (habitId: string) => {
     if (
       !window.confirm(
@@ -440,7 +319,7 @@ export default function HabitsPage() {
     try {
       const { error } = await habitService.deleteHabit(habitId);
       if (!error) {
-        await loadData();
+        await loadHabits();
       } else {
         alert(`Error deleting habit: ${error}`);
       }
@@ -471,11 +350,6 @@ export default function HabitsPage() {
     if (filter === "weekly") return habit.frequency === "weekly";
     return true;
   });
-
-  const getBestStreak = () => {
-    const streaks = Object.values(habitStats).map((s) => s.longestStreak);
-    return streaks.length > 0 ? Math.max(...streaks) : 0;
-  };
 
   if (loading) {
     return (
@@ -524,7 +398,7 @@ export default function HabitsPage() {
           <div className="flex items-center justify-between">
             <div>
               <p className="text-sm text-gray-600 dark:text-gray-400">
-                Today's Progress
+                Today&apos;s Progress
               </p>
               <p className="text-2xl font-bold text-gray-900 dark:text-white">
                 {Object.values(completions).filter(Boolean).length}/
@@ -577,7 +451,7 @@ export default function HabitsPage() {
                 Best Streak
               </p>
               <p className="text-2xl font-bold text-gray-900 dark:text-white">
-                {getBestStreak()}
+                {Object.values(habitStats).map((s) => s.streak).reduce((a, b) => Math.max(a, b), 0)}
               </p>
             </div>
             <Award className="w-8 h-8 text-yellow-500" />
@@ -610,7 +484,7 @@ export default function HabitsPage() {
       <div className="bg-white dark:bg-gray-800 p-6 rounded-lg shadow mb-6">
         <div className="flex items-center justify-between mb-4">
           <h2 className="text-lg font-semibold text-gray-900 dark:text-white">
-            Today's Progress
+            Today&apos;s Progress
           </h2>
           <span className="text-sm text-gray-600 dark:text-gray-400">
             {Object.values(completions).filter(Boolean).length} of{" "}
@@ -640,20 +514,12 @@ export default function HabitsPage() {
         ) : (
           filteredHabits.map((habit) => {
             const stats = habitStats[habit.habit_id] || {
-              currentStreak: 0,
+              completionCount: 0,
+              streak: 0,
               completionRate: 0,
-              last7Days: Array(7)
-                .fill(null)
-                .map((_, i) => {
-                  const date = new Date();
-                  date.setDate(date.getDate() - (6 - i));
-                  return {
-                    date: date.toISOString().split("T")[0],
-                    completed: false,
-                  };
-                }),
             };
             const isCompleted = completions[habit.habit_id];
+            const category = categories.find(c => c.category_id === habit.category_id);
 
             return (
               <div
@@ -677,7 +543,7 @@ export default function HabitsPage() {
 
                     <div className="flex items-center space-x-2">
                       <button
-                        onClick={() => toggleHabitCompletion(habit.habit_id)}
+                        onClick={() => handleHabitToggle(habit.habit_id)}
                         className={`p-3 rounded-full transition-colors ${
                           isCompleted
                             ? "bg-green-100 dark:bg-green-900/30 text-green-600 dark:text-green-400"
@@ -746,16 +612,16 @@ export default function HabitsPage() {
 
                   <div className="space-y-3">
                     {/* Category */}
-                    {habit.category && (
+                    {category && (
                       <div className="flex items-center space-x-2">
                         <span
                           className="text-xs px-2 py-1 rounded-full"
                           style={{
-                            backgroundColor: habit.category.color + "20",
-                            color: habit.category.color,
+                            backgroundColor: (category.color || '#6B7280') + "20",
+                            color: category.color || '#6B7280',
                           }}
                         >
-                          {habit.category.icon} {habit.category.name}
+                          {category.icon || '📋'} {category.name}
                         </span>
                       </div>
                     )}
@@ -783,10 +649,19 @@ export default function HabitsPage() {
 
                       <div className="flex items-center justify-between">
                         <span className="text-gray-500 dark:text-gray-400">
+                          Completions:
+                        </span>
+                        <span className="font-medium text-gray-900 dark:text-white">
+                          {stats.completionCount}
+                        </span>
+                      </div>
+
+                      <div className="flex items-center justify-between">
+                        <span className="text-gray-500 dark:text-gray-400">
                           Streak:
                         </span>
                         <span className="font-medium text-purple-600 dark:text-purple-400">
-                          {stats.currentStreak} days
+                          {stats.streak} days
                         </span>
                       </div>
 
@@ -795,7 +670,7 @@ export default function HabitsPage() {
                           Success:
                         </span>
                         <span className="font-medium text-gray-900 dark:text-white">
-                          {stats.completionRate}%
+                          {Math.round(stats.completionRate)}%
                         </span>
                       </div>
                     </div>
@@ -807,32 +682,6 @@ export default function HabitsPage() {
                         Reminder at {habit.reminder_time}
                       </div>
                     )}
-
-                    {/* Mini Calendar - Last 7 days */}
-                    <div className="flex items-center space-x-1 mt-3">
-                      {stats.last7Days.map((day, i) => {
-                        const date = new Date(day.date);
-                        const isToday = i === 6;
-
-                        return (
-                          <div
-                            key={i}
-                            className={`w-8 h-8 rounded-md flex items-center justify-center text-xs ${
-                              isToday
-                                ? "ring-2 ring-purple-500 dark:ring-purple-400"
-                                : ""
-                            } ${
-                              day.completed
-                                ? "bg-green-100 dark:bg-green-900/30 text-green-600 dark:text-green-400"
-                                : "bg-gray-100 dark:bg-gray-700 text-gray-400 dark:text-gray-500"
-                            }`}
-                            title={date.toLocaleDateString()}
-                          >
-                            {date.getDate()}
-                          </div>
-                        );
-                      })}
-                    </div>
                   </div>
                 </div>
               </div>

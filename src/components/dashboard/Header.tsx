@@ -7,6 +7,7 @@ import { useState, useEffect, Dispatch, SetStateAction } from "react"
 import { GlobalSearch } from "../GloabalSearch"
 import { notificationService, Notification } from "@//lib/database/notifications"
 import Link from "next/link"
+import Image from "next/image"
 import { Bell, User, Settings, LogOut, Menu, Moon, Sun } from 'lucide-react'
 
 interface HeaderProps {
@@ -152,20 +153,25 @@ export default function Header({ setSidebarOpen }: HeaderProps) {
                         onClick={() => setShowDropdown(!showDropdown)}
                         className="flex items-center space-x-2 text-gray-700 dark:text-gray-200 hover:text-gray-900 dark:hover:text-white p-2 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg"
                     >
-                        {user?.user_metadata?.avatar_url ? (
-                            <img 
-                                src={user.user_metadata.avatar_url}
-                                alt="Profile"
-                                className="w-8 h-8 rounded-full"
+                        <div className="flex items-center">
+                          <div className="flex-shrink-0">
+                            <Image
+                              className="h-8 w-8 rounded-full"
+                              src={user.avatar_url || '/default-avatar.png'}
+                              alt="User avatar"
+                              width={32}
+                              height={32}
                             />
-                        ) : (
-                            <div className="w-8 h-8 bg-purple-600 rounded-full flex items-center justify-center text-white text-sm font-medium">
-                                {getInitials(user?.email || 'U')}
-                            </div>
-                        )}
-                        <span className="hidden md:block text-sm font-medium">
-                            {user?.user_metadata?.full_name || user?.email?.split('@')[0] || 'User'}
-                        </span>
+                          </div>
+                          <div className="ml-3">
+                            <p className="text-sm font-medium text-gray-700 dark:text-gray-200">
+                              {user.full_name}
+                            </p>
+                            <p className="text-xs font-medium text-gray-500 dark:text-gray-400">
+                              {user.email}
+                            </p>
+                          </div>
+                        </div>
                         <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
                             <path fillRule="evenodd" d="M5.293 7.293a1 1 0 011.414 0L10 10.586l3.293-3.293a1 1 0 111.414 1.414l-4 4a1 1 0 01-1.414 0l-4-4a1 1 0 010-1.414z" clipRule="evenodd" />
                         </svg>

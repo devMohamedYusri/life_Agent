@@ -107,7 +107,7 @@ export const userService={
   
    async updateProfile(userId, updates) {
     const { data, error } = await client
-      .from('profiles')
+      .from('user_profiles')
       .update(updates)
       .eq('id', userId)
       .single()
@@ -129,7 +129,7 @@ export const userService={
 
     // Delete profile
     await client
-      .from('profiles')
+      .from('user_profiles')
       .delete()
       .eq('id', userId)
 

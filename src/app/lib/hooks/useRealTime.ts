@@ -1,7 +1,6 @@
 // app/hooks/useRealtime.ts
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { client } from '../supabase';
-import { useAuthStore } from '../stores/authStore';
 import { RealtimeChannel, RealtimePostgresChangesPayload } from '@supabase/supabase-js';
 
 type JsonValue = string | number | boolean | null | JsonObject | JsonArray;
@@ -19,40 +18,38 @@ interface RealtimePayload<T extends JsonObject> {
   commitTimestamp: string;
 }
 
-export function useRealtimeUpdates<T extends JsonObject>(
-  table: string, 
-  callback: (payload: RealtimePayload<T>) => void
+export function useRealTime<T>(
+  table: string,
+  filter: string,
+  callback: (payload: T) => void
 ) {
-  const { user } = useAuthStore();
+  const [channel, setChannel] = useState<RealtimeChannel | null>(null);
 
   useEffect(() => {
-    if (!user) return;
-
-    const channel: RealtimeChannel = client
-      .channel(`${table}_changes`)
-      .on<T>(
+    const newChannel = client
+      .channel(`public:${table}`)
+      .on(
         'postgres_changes',
         {
           event: '*',
           schema: 'public',
           table: table,
-          filter: `user_id=eq.${user.id}`
+          filter: filter
         },
-        (payload: RealtimePostgresChangesPayload<T>) => {
-          callback({
-            eventType: payload.eventType,
-            new: payload.new as T | null,
-            old: payload.old as T | null,
-            schema: payload.schema,
-            table: payload.table,
-            commitTimestamp: payload.commit_timestamp
-          });
+        (payload) => {
+          callback(payload.new as T);
         }
       )
       .subscribe();
 
+    setChannel(newChannel);
+
     return () => {
-      client.removeChannel(channel);
+      if (channel) {
+        client.removeChannel(channel);
+      }
     };
-  }, [user, table, callback]);
+  }, [table, filter, callback]);
+
+  return channel;
 }

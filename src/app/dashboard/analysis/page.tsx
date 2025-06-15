@@ -60,8 +60,6 @@ export default function AnalysisPage() {
       try {
         setLoading(true);
 
-        // Calculate date range
-        const endDate = new Date();
         const startDate = new Date();
         if (dateRange === "week") {
           startDate.setDate(startDate.getDate() - 7);
@@ -71,20 +69,25 @@ export default function AnalysisPage() {
           startDate.setFullYear(startDate.getFullYear() - 1);
         }
 
-        // Load all tasks
-        const { data: allTasks, error: tasksError } = await taskService.getUserTasks(user.id);
-        
-        // Load all goals
-        const { data: allGoals, error: goalsError } = await goalService.getUserGoals(user.id);
+        // Load all data concurrently
+        const [{ data: allTasks, error: tasksError }, { data: goals, error: goalsError }, { data: habits, error: habitsError }] = await Promise.all([
+          taskService.getUserTasks(user.id),
+          goalService.getUserGoals(user.id),
+          habitService.getUserHabits(user.id),
+        ]);
+
+        if (!goals) {
+          return <div>No goals found</div>;
+        }
 
         // Calculate stats directly from tasks and goals
-        if (allTasks && allGoals && mounted) {
+        if (allTasks && goals && habits && mounted) {
           const totalTasks = allTasks.length;
           const completedTasks = allTasks.filter(task => task.is_completed).length;
           const pendingTasks = totalTasks - completedTasks;
 
-          const totalGoals = allGoals.length;
-          const completedGoals = allGoals.filter(goal => goal.status === 'completed').length;
+          const totalGoals = goals.length;
+          const completedGoals = goals.filter(goal => goal.status === 'completed').length;
           const activeGoals = totalGoals - completedGoals;
 
           setStats({
@@ -94,7 +97,7 @@ export default function AnalysisPage() {
             totalTasks,
             completedTasks,
             pendingTasks,
-            totalHabits: stats?.totalHabits || 0  // Keep existing or default to 0
+            totalHabits: habits?.length || 0,
           });
         }
 
@@ -102,7 +105,7 @@ export default function AnalysisPage() {
         const { data: moodStats, error: moodError } = await journalService.getMoodStats(
           user.id,
           startDate.toISOString().split("T")[0],
-          endDate.toISOString().split("T")[0]
+          new Date().toISOString().split("T")[0]
         );
         if (!moodError && moodStats && mounted) {
           setMoodData(moodStats as MoodData);
@@ -160,8 +163,6 @@ export default function AnalysisPage() {
         }
 
         // Load habit streaks
-        const { data: habits, error: habitsError } = await habitService.getUserHabits(user.id);
-        
         if (!habitsError && habits && mounted) {
           const streakData: HabitStreak[] = [];
           

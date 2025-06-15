@@ -29,7 +29,7 @@ interface AITip {
   category: string;
 }
 
-interface AIPlan {
+interface Plan {
   tasks: AITask[];
   habits: AIHabit[];
   tips: AITip[];
@@ -56,7 +56,7 @@ interface PlanContext {
 }
 
 export const aiPlanService = {
-  async generatePlan(userId: string, planType: string, preferences: UserPreferences): Promise<AIPlan> {
+  async generatePlan(userId: string, planType: string, preferences: UserPreferences): Promise<Plan> {
     // Fetch user data
     const [tasks, goals] = await Promise.all([
       taskService.getUserTasks(userId),
@@ -96,7 +96,7 @@ export const aiPlanService = {
         throw new Error('No response from AI service')
       }
       // Parse and structure the response
-      const parsedResponse = JSON.parse(response) as AIPlan
+      const parsedResponse = JSON.parse(response) as Plan
       return {
         ...parsedResponse,
         createdAt: new Date().toISOString()
@@ -107,14 +107,14 @@ export const aiPlanService = {
     }
   },
 
-  async savePlan(userId: string, plan: AIPlan): Promise<void> {
+  async savePlan(userId: string, plan: Plan): Promise<void> {
     // Save plan to database or localStorage
-    const plans = JSON.parse(localStorage.getItem(`ai-plans-${userId}`) || '[]') as AIPlan[]
+    const plans = JSON.parse(localStorage.getItem(`ai-plans-${userId}`) || '[]') as Plan[]
     plans.unshift(plan)
     localStorage.setItem(`ai-plans-${userId}`, JSON.stringify(plans.slice(0, 10)))
   },
 
-  async applyPlanToSchedule(userId: string, plan: AIPlan): Promise<void> {
+  async applyPlanToSchedule(userId: string, plan: Plan): Promise<void> {
     const promises = plan.tasks.map((task: AITask) => {
       return taskService.createTask({
         user_id: userId,
@@ -135,4 +135,34 @@ function calculateDueDate(bestTime: string): string {
   const today = new Date()
   // Implementation depends on format of bestTime
   return today.toISOString()
+}
+
+export async function generatePlan(
+  _planType: string,
+  _preferences: Record<string, unknown>,
+  _bestTime: string,
+  context: PlanContext
+): Promise<Plan> {
+  return {
+    tasks: [],
+    habits: [],
+    tips: [],
+    goalAlignment: [],
+    createdAt: new Date().toISOString()
+  }
+}
+
+export async function generateWeeklyPlan(
+  _planType: string,
+  _preferences: Record<string, unknown>,
+  _bestTime: string,
+  context: PlanContext
+): Promise<Plan> {
+  return {
+    tasks: [],
+    habits: [],
+    tips: [],
+    goalAlignment: [],
+    createdAt: new Date().toISOString()
+  }
 }
