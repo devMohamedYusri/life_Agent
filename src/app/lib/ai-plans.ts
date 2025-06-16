@@ -3,11 +3,11 @@ import { aiService } from './ai'
 import { taskService } from './database/tasks'
 import { goalService } from './database/goals'
 
-interface UserPreferences {
-  focusAreas: string[];
-  workHours: string;
-  intensity: 'low' | 'medium' | 'high';
-}
+// interface UserPreferences {
+//   focusAreas: string[];
+//   workHours: string;
+//   intensity: 'low' | 'medium' | 'high';
+// }
 
 interface AITask {
   title: string;

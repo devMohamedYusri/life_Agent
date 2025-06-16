@@ -3,11 +3,8 @@ import { useEffect, useState } from 'react';
 import { client } from '../supabase';
 import { RealtimeChannel, RealtimePostgresChangesPayload } from '@supabase/supabase-js';
 
-type JsonValue = string | number | boolean | null | JsonObject | JsonArray;
-interface JsonObject {
-  [key: string]: JsonValue;
-}
-interface JsonArray extends Array<JsonValue> {}
+type JsonValue = string | number | boolean | null | { [key: string]: JsonValue } | JsonValue[];
+// type JsonArray = JsonValue[];
 
 // interface RealtimePayload<T extends JsonObject> {
 //   eventType: 'INSERT' | 'UPDATE' | 'DELETE';
@@ -18,7 +15,7 @@ interface JsonArray extends Array<JsonValue> {}
 //   commitTimestamp: string;
 // }
 
-export function useRealTime<T extends JsonObject>(
+export function useRealTime<T extends { [key: string]: JsonValue }>(
   table: string,
   filter: string,
   callback: (payload: T) => void
@@ -49,12 +46,12 @@ export function useRealTime<T extends JsonObject>(
         client.removeChannel(channel);
       }
     };
-  }, [table, filter, callback]);
+  }, [table, filter, callback,channel]);
 
   return channel;
 }
 
-export function useRealTimeSync<T extends JsonObject>(
+export function useRealTimeSync<T extends { [key: string]: JsonValue }>(
   table: string,
   filter: string,
   onInsert?: (payload: T) => void,
@@ -97,7 +94,7 @@ export function useRealTimeSync<T extends JsonObject>(
         client.removeChannel(channel);
       }
     };
-  }, [table, filter, onInsert, onUpdate, onDelete]);
+  }, [table, filter, onInsert, onUpdate, onDelete,channel]);
 
   return channel;
 }
