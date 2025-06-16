@@ -17,15 +17,19 @@ interface Category {
   icon: string
 }
 
+type GoalType = "short-term" | "long-term"
+type GoalStatus = "active" | "completed" | "cancelled" | "paused"
+type GoalPriority = "low" | "medium" | "high" | "urgent"
+
 interface Goal {
   goal_id: string
   title: string
   description: string
-  goal_type: string
+  goal_type: GoalType
   progress: number
   deadline: string | null
-  status: string
-  priority: string
+  status: GoalStatus
+  priority: GoalPriority
   category?: Category | null
   tasks: Task[]
 }
@@ -37,6 +41,16 @@ interface CategoryData {
   color: string
 }
 
+interface GoalFormData {
+  title: string
+  description: string
+  goal_type: GoalType
+  priority: GoalPriority
+  deadline: string
+  category_id: string
+  progress: number
+}
+
 export default function GoalsPage() {
   const { user } = useAuthStore()
   const [goals, setGoals] = useState<Goal[]>([])
@@ -45,13 +59,14 @@ export default function GoalsPage() {
   const [showCreateModal, setShowCreateModal] = useState(false)
   const [filter, setFilter] = useState('all')
   
-  const [formData, setFormData] = useState({
+  const [formData, setFormData] = useState<GoalFormData>({
     title: '',
     description: '',
     goal_type: 'short-term',
-    deadline: '',
     priority: 'medium',
-    category_id: ''
+    deadline: '',
+    category_id: '',
+    progress: 0
   })
 
   const loadData = useCallback(async () => {
@@ -83,10 +98,10 @@ export default function GoalsPage() {
       const goalData = {
         ...formData,
         user_id: user.id,
-        status: 'active',
-        progress: 0,
         deadline: formData.deadline || null,
-        category_id: formData.category_id || null
+        category_id: formData.category_id || null,
+        status: 'active' as GoalStatus,
+        progress: formData.progress
       }
       
       const { error } = await goalService.createGoal(goalData)
@@ -98,9 +113,10 @@ export default function GoalsPage() {
           title: '',
           description: '',
           goal_type: 'short-term',
-          deadline: '',
           priority: 'medium',
-          category_id: ''
+          deadline: '',
+          category_id: '',
+          progress: 0
         })
       }
     } catch (error) {
@@ -108,7 +124,7 @@ export default function GoalsPage() {
     }
   }
 
-  const updateGoalStatus = async (goalId: string, status: string) => {
+  const updateGoalStatus = async (goalId: string, status: GoalStatus) => {
     try {
       await goalService.updateGoal(goalId, { status })
       await loadData()
@@ -267,7 +283,7 @@ export default function GoalsPage() {
                 <div className="flex justify-between items-center">
                   <select
                     value={goal.status}
-                    onChange={(e) => updateGoalStatus(goal.goal_id, e.target.value)}
+                    onChange={(e) => updateGoalStatus(goal.goal_id, e.target.value as GoalStatus)}
                     className="text-sm border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded px-2 py-1 focus:outline-none focus:ring-2 focus:ring-purple-500"
                   >
                     <option value="active">Active</option>
@@ -323,7 +339,7 @@ export default function GoalsPage() {
                   <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Goal Type</label>
                   <select
                     value={formData.goal_type}
-                    onChange={(e) => setFormData({ ...formData, goal_type: e.target.value })}
+                    onChange={(e) => setFormData({ ...formData, goal_type: e.target.value as GoalType })}
                     className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded-md focus:outline-none focus:ring-2 focus:ring-purple-500"
                   >
                     <option value="short-term">Short Term</option>
@@ -335,7 +351,7 @@ export default function GoalsPage() {
                   <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Priority</label>
                   <select
                     value={formData.priority}
-                    onChange={(e) => setFormData({ ...formData, priority: e.target.value })}
+                    onChange={(e) => setFormData({ ...formData, priority: e.target.value as GoalPriority })}
                     className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded-md focus:outline-none focus:ring-2 focus:ring-purple-500"
                   >
                     <option value="low">Low</option>
