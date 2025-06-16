@@ -31,14 +31,14 @@ interface Category {
   icon: string;
 }
 
-interface HabitLog {
-  id: string;
-  habit_id: string;
-  completed_date: string;
-  completed: boolean;
-  notes?: string;
-  created_at: string;
-}
+// interface HabitLog {
+//   id: string;
+//   habit_id: string;
+//   completed_date: string;
+//   completed: boolean;
+//   notes?: string;
+//   created_at: string;
+// }
 
 interface FormData {
   title: string;

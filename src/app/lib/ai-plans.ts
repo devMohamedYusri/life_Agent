@@ -56,7 +56,9 @@ interface PlanContext {
 }
 
 export const aiPlanService = {
-  async generatePlan(userId: string, planType: string, preferences: UserPreferences): Promise<Plan> {
+  // async generatePlan(userId: string, planType: string, preferences: UserPreferences): Promise<Plan> {
+    async generatePlan(userId: string): Promise<Plan> {
+
     // Fetch user data
     const [tasks, goals] = await Promise.all([
       taskService.getUserTasks(userId),
@@ -121,8 +123,8 @@ export const aiPlanService = {
         title: task.title,
         description: task.description,
         priority: task.priority,
-        due_date: calculateDueDate(task.best_time),
-        completed: false
+        due_date: calculateDueDate(),
+        is_completed: false
       })
     })
 
@@ -130,7 +132,9 @@ export const aiPlanService = {
   }
 }
 
-function calculateDueDate(bestTime: string): string {
+// function calculateDueDate(bestTime: string): string {
+  function calculateDueDate(): string {
+
   // Parse best time and create appropriate due date
   const today = new Date()
   // Implementation depends on format of bestTime
