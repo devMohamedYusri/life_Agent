@@ -1,36 +1,24 @@
 // src/app/api/notifications/[id]/read/route.ts
 import { NextRequest, NextResponse } from 'next/server';
 import { notificationService } from '@//lib/database/notifications';
-// import { createRouteHandlerClient } from '@supabase/auth-helpers-nextjs';
-// import { cookies } from 'next/headers';
-
-// // Dummy user extraction for demonstration; replace with real auth
-// async function getUserIdFromRequest(): Promise<string> {
-//   const supabase = createRouteHandlerClient({ cookies });
-//   const { data: { session } } = await supabase.auth.getSession();
-
-//   if (!session || !session.user) {
-//     throw new Error('Unauthorized');
-//   }
-//   return session.user.id;
-// }
-
-type RouteContext = {
-  params: {
-    id: string;
-  };
-};
 
 export async function POST(
   request: NextRequest,
-  context: RouteContext
+  { params }: { params: { id: string } }
 ): Promise<NextResponse> {
   try {
-    // Extract params properly
-    const { id: notificationId } = context.params;
+    // Extract notification ID from params
+    const notificationId = params.id;
     
-    // Ensure user is authenticated
-    // const userId = await getUserIdFromRequest();
+    // TODO: Add proper authentication here
+    // For now, you can get user ID from headers (if you're passing it)
+    // const userId = request.headers.get('x-user-id');
+    // if (!userId) {
+    //   return NextResponse.json(
+    //     { error: 'Unauthorized' },
+    //     { status: 401 }
+    //   );
+    // }
     
     // Mark notification as read
     const { data, error } = await notificationService.markAsRead(notificationId);
@@ -50,12 +38,9 @@ export async function POST(
   } catch (error) {
     const err = error as Error;
     
-    // Return appropriate status code based on error
-    const status = err.message === 'Unauthorized' ? 401 : 400;
-    
     return NextResponse.json(
-      { error: err.message },
-      { status }
+      { error: err.message || 'Internal server error' },
+      { status: 500 }
     );
   }
 }
