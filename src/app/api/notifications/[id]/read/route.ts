@@ -1,8 +1,8 @@
 // src/app/api/notifications/[id]/read/route.ts
 import { NextRequest, NextResponse } from 'next/server';
 import { notificationService } from '@//lib/database/notifications';
-import { createRouteHandlerClient } from '@supabase/auth-helpers-nextjs';
-import { cookies } from 'next/headers';
+// import { createRouteHandlerClient } from '@supabase/auth-helpers-nextjs';
+// import { cookies } from 'next/headers';
 
 // // Dummy user extraction for demonstration; replace with real auth
 // async function getUserIdFromRequest(): Promise<string> {
