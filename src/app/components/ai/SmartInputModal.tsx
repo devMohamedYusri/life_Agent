@@ -44,7 +44,8 @@ export function SmartInputModal({
       const data = await response.json();
       setSuggestions(data.suggestions);
     } catch (err) {
-      setError((err instanceof Error) ? err.message : 'Unable to get suggestions. Please try again.');
+      const errorMessage = (err instanceof Error) ? err.message : 'Unable to get suggestions. Please try again.';
+      setError(errorMessage);
       console.error('Error fetching smart suggestions:', (err instanceof Error) ? err : "");
     } finally {
       setIsLoading(false);

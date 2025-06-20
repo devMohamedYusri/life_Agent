@@ -294,7 +294,7 @@ export default function DashboardHome() {
     setIsLoadingSuggestions(true);
     try {
       // const [tasks, goals, habits] = await Promise.all([
-      const [tasks,goals,habits] =await Promise.all([
+      const [tasks,goals] =await Promise.all([
         taskService.getUserTasks(user.id),
         goalService.getUserGoals(user.id),
         habitService.getUserHabits(user.id)

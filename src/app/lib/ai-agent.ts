@@ -419,7 +419,7 @@ export class AIAgent {
         return [fallbackSuggestion];
       }
     } catch (error: unknown) {
-      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+      // const errorMessage = error instanceof Error ? error.message : 'Unknown error';
       console.error('Error getting smart suggestions:', error);
       
       // Provide a fallback suggestion even if the AI call fails

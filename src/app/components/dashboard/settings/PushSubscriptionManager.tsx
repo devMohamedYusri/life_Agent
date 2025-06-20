@@ -103,7 +103,7 @@ export default function PushSubscriptionManager({ onMessage }: { onMessage: (msg
     return (
       <div className="p-4 bg-red-100 dark:bg-red-900 rounded-lg text-red-700 dark:text-red-200">
         <p className="font-semibold">Push notifications are blocked.</p>
-        <p className="text-sm">You'll need to enable them in your browser settings to receive push alerts.</p>
+        <p className="text-sm">You&apos;ll need to enable them in your browser settings to receive push alerts.</p>
       </div>
     );
   }

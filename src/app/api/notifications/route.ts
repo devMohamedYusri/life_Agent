@@ -6,7 +6,7 @@ import { cookies } from 'next/headers';
 import { sendPushNotification } from '../../lib/web-push';
 
 // Dummy user extraction for demonstration; replace with real auth
-async function getUserFromRequest(req: NextRequest) {
+async function getUserFromRequest() {
   const supabase = createRouteHandlerClient({ cookies });
   const { data: { session } } = await supabase.auth.getSession();
 
@@ -16,9 +16,9 @@ async function getUserFromRequest(req: NextRequest) {
   return { id: session.user.id };
 }
 
-export async function GET(req: NextRequest) {
+export async function GET() {
   try {
-    const user = await getUserFromRequest(req);
+    const user = await getUserFromRequest();
     const { data } = await notificationService.getUnread(user.id);
     return NextResponse.json({ notifications: data });
   } catch (error) {
@@ -29,7 +29,7 @@ export async function GET(req: NextRequest) {
 
 export async function POST(req: NextRequest) {
   try {
-    const user = await getUserFromRequest(req);
+    const user = await getUserFromRequest();
     const body = await req.json();
     const notificationData = {
       ...body,
@@ -43,6 +43,7 @@ export async function POST(req: NextRequest) {
       await channel.publish('new-notification', newNotification);
 
       // 2. Send a web push notification
+      // const cookieStore = cookies();
       const supabase = createRouteHandlerClient({ cookies });
       const { data: subscriptions } = await supabase
         .from('push_subscriptions')
@@ -75,7 +76,7 @@ export async function POST(req: NextRequest) {
 // Mark as read (single notification)
 export async function PUT(req: NextRequest) {
   try {
-    const user = await getUserFromRequest(req);
+    // const user = await getUserFromRequest();
     const { notificationId } = await req.json();
     const { data } = await notificationService.markAsRead(notificationId);
     return NextResponse.json({ notification: data });
@@ -86,9 +87,9 @@ export async function PUT(req: NextRequest) {
 }
 
 // Mark all as read
-export async function PATCH(req: NextRequest) {
+export async function PATCH() {
   try {
-    const user = await getUserFromRequest(req);
+    const user = await getUserFromRequest();
     await notificationService.markAllAsRead(user.id);
     return NextResponse.json({ success: true });
   } catch (error) {

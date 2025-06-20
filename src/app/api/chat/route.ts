@@ -120,6 +120,7 @@ User Message: ${message}`
             suggestions: parsedResponse.suggestions || []
         };
     } catch (e) {
+        console.log("error occured ",e)
         // If parsing fails, return the raw content
         return {
             content: content,

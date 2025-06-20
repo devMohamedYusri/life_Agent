@@ -6,7 +6,16 @@ import { journalService } from './database/journal';
 import { categoryService } from './database/categories';
 import { userService } from './database/users';
 import { jsPDF } from 'jspdf';
-import autoTable from 'jspdf-autotable';
+import autoTable, { UserOptions } from 'jspdf-autotable';
+
+declare module 'jspdf' {
+  interface jsPDF {
+    autoTable: (options: UserOptions) => void;
+    lastAutoTable: {
+      finalY: number;
+    };
+  }
+}
 
 // Define types for the data structures
 export interface Task {
@@ -306,7 +315,7 @@ export const exportService = {
         margin: { left: margin },
         styles: { fontSize: 10, cellPadding: 5 }
       });
-      yPos = (doc as any).lastAutoTable.finalY + 20;
+      yPos = doc.lastAutoTable.finalY + 20;
 
       // Add Tasks Overview
       if (tasks && tasks.length > 0) {
@@ -337,7 +346,7 @@ export const exportService = {
             3: { cellWidth: 40 }
           }
         });
-        yPos = (doc as any).lastAutoTable.finalY + 20;
+        yPos = doc.lastAutoTable.finalY + 20;
       }
 
       // Add Goals Progress
@@ -369,7 +378,7 @@ export const exportService = {
             3: { cellWidth: 40 }
           }
         });
-        yPos = (doc as any).lastAutoTable.finalY + 20;
+        yPos = doc.lastAutoTable.finalY + 20;
       }
 
       // Add Habits Tracking
@@ -401,7 +410,7 @@ export const exportService = {
             3: { cellWidth: 40 }
           }
         });
-        yPos = (doc as any).lastAutoTable.finalY + 20;
+        yPos = doc.lastAutoTable.finalY + 20;
       }
 
       // Add Journal Summary
