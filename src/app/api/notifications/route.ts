@@ -1,16 +1,19 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { notificationService } from '../../lib/database/notifications';
 import ably from '../../lib/ably';
-import { client } from '../../lib/supabase';
+import { createRouteHandlerClient } from '@supabase/auth-helpers-nextjs';
+import { cookies } from 'next/headers';
 import { sendPushNotification } from '../../lib/web-push';
 
 // Dummy user extraction for demonstration; replace with real auth
 async function getUserFromRequest(req: NextRequest) {
-  // Implement your real authentication logic here
-  // For now, get user id from a header for testing
-  const userId = req.headers.get('x-user-id');
-  if (!userId) throw new Error('Unauthorized');
-  return { id: userId };
+  const supabase = createRouteHandlerClient({ cookies });
+  const { data: { session } } = await supabase.auth.getSession();
+
+  if (!session || !session.user) {
+    throw new Error('Unauthorized');
+  }
+  return { id: session.user.id };
 }
 
 export async function GET(req: NextRequest) {
@@ -40,7 +43,8 @@ export async function POST(req: NextRequest) {
       await channel.publish('new-notification', newNotification);
 
       // 2. Send a web push notification
-      const { data: subscriptions } = await client
+      const supabase = createRouteHandlerClient({ cookies });
+      const { data: subscriptions } = await supabase
         .from('push_subscriptions')
         .select('subscription_details')
         .eq('user_id', user.id);

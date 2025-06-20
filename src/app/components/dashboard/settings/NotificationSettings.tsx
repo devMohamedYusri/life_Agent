@@ -58,9 +58,10 @@ export default function NotificationSettings({ initialNotifications, onNotificat
       
       onMessage('Notification settings saved!')
       onNotificationsUpdate(notifications); // Notify parent
-    } catch (error: any) {
+    } catch (error) {
       console.error('Error saving notifications:', error)
-      onMessage(`Error saving notification settings: ${error.message || 'Please try again.'}`, true)
+      onMessage(`Error saving notification settings: ${(error instanceof Error) ? error.message : 'Please try again.'}`, true);
+
     } finally {
       setLoading(false)
     }

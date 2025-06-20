@@ -2,9 +2,8 @@
 'use client'
 
 import { useState, useEffect, useCallback } from 'react'
-import { useAuthStore } from '@lib/stores/authStore'
-import { userService } from '@lib/database/users'
-// import { notificationService } from '@lib/database/notifications'
+import { useAuthStore } from '@//lib/stores/authStore'
+import { userService } from '@//lib/database/users'
 import { 
   User, 
   Bell, 
@@ -30,7 +29,7 @@ interface UserProfile {
   created_at: string
 }
 
-interface NotificationSettings {
+interface NotificationSettingsType {
   emailReminders: boolean
   taskDeadlines: boolean
   dailyDigest: boolean
@@ -56,7 +55,7 @@ export default function SettingsPage() {
   })
   
   // Notification settings
-  const [notifications, setNotifications] = useState<NotificationSettings>({
+  const [notifications, setNotifications] = useState<NotificationSettingsType>({
     emailReminders: true,
     taskDeadlines: true,
     dailyDigest: false,
@@ -68,8 +67,15 @@ export default function SettingsPage() {
   // Theme settings
   const [theme, setTheme] = useState<'light' | 'dark' | 'system'>('light')
   const [timeZone, setTimeZone] = useState<string>('auto')
-  
 
+  // Handle message display
+  const handleMessage = useCallback((msg: string, isError: boolean = false) => {
+    console.log("Message:", msg, "Is error:", isError)
+    setMessage(msg)
+    setTimeout(() => setMessage(''), 3000)
+  }, [])
+
+  // Load user data
   const loadUserData = useCallback(async () => {
     if (!user) return
     
@@ -101,8 +107,9 @@ export default function SettingsPage() {
 
     } catch (error) {
       console.error('Error loading user data:', error)
+      handleMessage('Error loading user data. Please try again.', true)
     }
-  }, [user]);
+  }, [user, handleMessage])
 
   useEffect(() => {
     if (user) {
@@ -110,12 +117,8 @@ export default function SettingsPage() {
     }
   }, [user, loadUserData])
 
-  const handleMessage = useCallback((msg: string, isError: boolean = false) => {
-    setMessage(msg);
-    setTimeout(() => setMessage(''), 3000);
-  }, []);
-
-  const handleProfileUpdate = async () => {
+  // Handle profile update
+  const handleProfileUpdate = async (updatedProfile: UserProfile) => {
     if (!user) return
     
     setLoading(true)
@@ -123,21 +126,30 @@ export default function SettingsPage() {
     
     try {
       await userService.updateProfile(user.id, {
-        user_name: profile.user_name,
-        bio: profile.bio,
-        avatar_url: profile.avatar_url
+        user_name: updatedProfile.user_name,
+        bio: updatedProfile.bio,
+        avatar_url: updatedProfile.avatar_url
       })
       
-      setMessage('Profile updated successfully!')
-      setTimeout(() => setMessage(''), 3000)
+      setProfile(updatedProfile)
+      handleMessage('Profile updated successfully!')
     } catch (error) {
       console.error('Error updating profile:', error)
-      setMessage('Error updating profile. Please try again.')
+      handleMessage('Error updating profile. Please try again.', true)
     } finally {
       setLoading(false)
     }
   }
 
+  // Handle sign out
+  const handleSignOut = async () => {
+    try {
+      await signOut()
+    } catch (error) {
+      console.error('Error signing out:', error)
+      handleMessage('Error signing out. Please try again.', true)
+    }
+  }
 
   const tabs = [
     { id: 'profile', label: 'Profile', icon: User },
@@ -148,23 +160,24 @@ export default function SettingsPage() {
   ]
 
   return (
-    <div>
+    <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
       <div className="mb-8">
         <h1 className="text-3xl font-bold text-gray-900 dark:text-white">Settings</h1>
         <p className="text-gray-600 dark:text-gray-400 mt-2">Manage your account and preferences</p>
       </div>
 
       {message && (
-        <div className={`mb-6 p-4 rounded-lg ${
-          message.includes('Error') || message.includes('denied')
-            ? 'bg-red-100 text-red-700 dark:bg-red-900 dark:text-red-200' 
-            : 'bg-green-100 text-green-700 dark:bg-green-900 dark:text-green-200'
+        <div className={`mb-6 p-4 rounded-lg transition-all duration-300 ${
+          message.includes('Error') || message.includes('error') || message.includes('denied')
+            ? 'bg-red-100 text-red-700 dark:bg-red-900/20 dark:text-red-400 border border-red-200 dark:border-red-800' 
+            : 'bg-green-100 text-green-700 dark:bg-green-900/20 dark:text-green-400 border border-green-200 dark:border-green-800'
         }`}>
           {message}
         </div>
       )}
 
       <div className="flex flex-col lg:flex-row gap-6">
+        {/* Sidebar Navigation */}
         <div className="lg:w-64">
           <nav className="space-y-1">
             {tabs.map(tab => (
@@ -173,7 +186,7 @@ export default function SettingsPage() {
                 onClick={() => setActiveTab(tab.id)}
                 className={`w-full flex items-center space-x-3 px-4 py-3 rounded-lg transition-colors ${
                   activeTab === tab.id
-                    ? 'bg-purple-100 text-purple-700 dark:bg-purple-900 dark:text-purple-200'
+                    ? 'bg-purple-100 text-purple-700 dark:bg-purple-900/20 dark:text-purple-400 border border-purple-200 dark:border-purple-800'
                     : 'text-gray-700 hover:bg-gray-100 dark:text-gray-300 dark:hover:bg-gray-800'
                 }`}
               >
@@ -182,15 +195,29 @@ export default function SettingsPage() {
               </button>
             ))}
           </nav>
+
+          {/* Sign Out Button */}
+          <div className="mt-8 pt-8 border-t dark:border-gray-700">
+            <button
+              onClick={handleSignOut}
+              disabled={loading}
+              className="w-full flex items-center justify-center space-x-2 px-4 py-3 text-red-600 hover:bg-red-50 dark:text-red-400 dark:hover:bg-red-900/20 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              <LogOut className="w-4 h-4" />
+              <span>Sign Out</span>
+            </button>
+          </div>
         </div>
 
+        {/* Main Content */}
         <div className="flex-1">
-          <div className="bg-white dark:bg-gray-800 rounded-lg shadow p-6">
+          <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm border dark:border-gray-700 p-6">
             {activeTab === 'profile' && (
               <ProfileSettings 
                 initialProfile={profile}
-                onProfileUpdate={setProfile}
+                onProfileUpdate={handleProfileUpdate}
                 onMessage={handleMessage}
+                loading={loading}
               />
             )}
             {activeTab === 'notifications' && (
@@ -224,16 +251,6 @@ export default function SettingsPage() {
             )}
           </div>
         </div>
-      </div>
-
-      <div className="mt-8 flex justify-end">
-        <button
-          onClick={signOut}
-          className="flex items-center space-x-2 px-4 py-2 text-red-600 hover:bg-red-50 dark:hover:bg-red-900 rounded-md"
-        >
-          <LogOut className="w-4 h-4" />
-          <span>Sign Out</span>
-        </button>
       </div>
     </div>
   )

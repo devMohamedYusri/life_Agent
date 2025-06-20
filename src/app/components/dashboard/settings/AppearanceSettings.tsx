@@ -31,9 +31,9 @@ export default function AppearanceSettings({ initialTheme, initialTimeZone, onTh
       onThemeChange(theme);
       onTimeZoneChange(timeZone);
       onMessage('Appearance settings updated!');
-    } catch (error: any) {
-      console.error('Error updating appearance settings:', error);
-      onMessage(`Error updating settings: ${error.message || 'Please try again.'}`, true);
+    } catch (error) {
+      console.error('Error updating appearance settings:', error instanceof Error ? error : 'An unknown error occurred');
+      onMessage(`Error updating settings: ${(error instanceof Error) ? error.message : 'Please try again.'}`, true);
     } finally {
       setLoading(false);
     }

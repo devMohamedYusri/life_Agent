@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { AIContext, AISuggestion } from '../../types/ai-agent';
 import { Sparkles, X, Plus, RefreshCw } from 'lucide-react';
-import { Button } from '../ui/button'; // Assuming shared UI components
+import { Button } from '../ui/button';
 
 interface SmartInputModalProps {
   isOpen: boolean;
@@ -43,9 +43,9 @@ export function SmartInputModal({
 
       const data = await response.json();
       setSuggestions(data.suggestions);
-    } catch (err: any) {
-      setError(err.message || 'Unable to get suggestions. Please try again.');
-      console.error('Error fetching smart suggestions:', err);
+    } catch (err) {
+      setError((err instanceof Error) ? err.message : 'Unable to get suggestions. Please try again.');
+      console.error('Error fetching smart suggestions:', (err instanceof Error) ? err : "");
     } finally {
       setIsLoading(false);
     }

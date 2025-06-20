@@ -30,11 +30,11 @@ export class AIAgent {
   }
 
   private async callModel(prompt: string): Promise<string> {
-    let lastError: any = null;
-    let triedModels: string[] = [];
+    let lastError: Error | null = null;
+    const triedModels: readonly string[] = [];
     
     for (const model of MODELS) {
-      triedModels.push(model);
+      (triedModels as string[]).push(model);
       try {
         console.log(`Trying model: ${model}`);
         
@@ -65,7 +65,9 @@ export class AIAgent {
           try {
             const error = JSON.parse(text);
             message = error.message || response.statusText || text;
-          } catch (_) {}
+          } catch {
+            console.log("error caught");
+          }
           
           // Handle specific error types
           if (response.status === 402) {
@@ -92,9 +94,10 @@ export class AIAgent {
         
         console.log(`Successfully used model: ${model}`);
         return text;
-      } catch (error: any) {
-        console.error(`Error calling AI model ${model}:`, error.message);
-        lastError = error;
+      } catch (error: unknown) {
+        const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+        console.error(`Error calling AI model ${model}:`, errorMessage);
+        lastError = error instanceof Error ? error : new Error(errorMessage);
         // Continue to next model if there's an error
       }
     }
@@ -134,7 +137,8 @@ export class AIAgent {
       try {
         JSON.parse(jsonCandidate);
         return jsonCandidate;
-      } catch (e) {
+      } catch {
+        console.log("it's not valid JSON");
         // If it's not valid JSON, continue to other methods
       }
     } 
@@ -145,7 +149,8 @@ export class AIAgent {
       try {
         JSON.parse(jsonCandidate);
         return jsonCandidate;
-      } catch (e) {
+      } catch {
+        console.log("it's not valid JSON");
         // If it's not valid JSON, continue to other methods
       }
     }
@@ -237,7 +242,13 @@ export class AIAgent {
           throw new Error('AI response did not contain a valid suggestions array');
         }
 
-        return parsedResponse.suggestions.map((suggestion: any) => ({
+        return parsedResponse.suggestions.map((suggestion: {
+          type: string;
+          title: string;
+          description: string;
+          priority: string;
+          reason: string;
+        }) => ({
           id: generateUUID(),
           type: suggestion.type,
           title: suggestion.title,
@@ -249,9 +260,10 @@ export class AIAgent {
         console.error('Error parsing AI suggestions:', error);
         throw new Error('Failed to parse AI suggestions response');
       }
-    } catch (error: any) {
+    } catch (error: unknown) {
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
       console.error('Error getting suggestions:', error);
-      throw new Error(`Failed to get suggestions: ${error.message}`);
+      throw new Error(`Failed to get suggestions: ${errorMessage}`);
     }
   }
 
@@ -289,9 +301,10 @@ export class AIAgent {
         console.error('Error parsing weekly insight:', error);
         throw new Error('Failed to parse weekly insight response');
       }
-    } catch (error: any) {
+    } catch (error: unknown) {
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
       console.error('Error getting weekly insight:', error);
-      throw new Error(`Failed to get weekly insight: ${error.message}`);
+      throw new Error(`Failed to get weekly insight: ${errorMessage}`);
     }
   }
 
@@ -349,7 +362,7 @@ export class AIAgent {
         const parsedResponse = JSON.parse(jsonString);
         console.log('Parsed response type:', typeof parsedResponse, Array.isArray(parsedResponse) ? 'array' : 'object');
         
-        let suggestions: any[] = [];
+        let suggestions: AISuggestion[] = [];
         
         // Handle both array format and single object with subSuggestions format
         if (Array.isArray(parsedResponse)) {
@@ -372,7 +385,7 @@ export class AIAgent {
         console.log('Final suggestions count:', suggestions.length);
 
         // Basic validation for each suggestion
-        suggestions.forEach((s: any, index: number) => {
+        suggestions.forEach((s: AISuggestion, index: number) => {
           if (!s.id) s.id = generateUUID(); // Ensure ID exists
           if (!s.type || !['task', 'habit', 'goal'].includes(s.type)) {
             console.warn(`Invalid or missing type for suggestion ${index}: ${s.title || 'Unknown'}. Defaulting to task.`);
@@ -405,7 +418,8 @@ export class AIAgent {
         console.log('Returning fallback suggestion due to parsing error');
         return [fallbackSuggestion];
       }
-    } catch (error: any) {
+    } catch (error: unknown) {
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
       console.error('Error getting smart suggestions:', error);
       
       // Provide a fallback suggestion even if the AI call fails
@@ -422,4 +436,4 @@ export class AIAgent {
       return [fallbackSuggestion];
     }
   }
-} 
+}

@@ -8,6 +8,53 @@ import { userService } from './database/users';
 import { jsPDF } from 'jspdf';
 import autoTable from 'jspdf-autotable';
 
+// Define types for the data structures
+export interface Task {
+  id: string;
+  title: string;
+  description?: string;
+  status: string;
+  priority: string;
+  due_date?: string;
+  category?: string;
+  goal?: string;
+}
+
+export interface Goal {
+  id: string;
+  title: string;
+  description?: string;
+  status: string;
+  progress?: number;
+  deadline?: string;
+  category?: string;
+}
+
+export interface Habit {
+  id: string;
+  title: string;
+  description?: string;
+  frequency: string;
+  reminder_time?: string;
+  target_count?: number;
+  streak?: number;
+}
+
+export interface JournalEntry {
+  id: string;
+  entry_date: string;
+  content: string;
+  mood?: string;
+  tags?: string[];
+}
+
+// interface Category {
+//   id: string;
+//   user_id: string;
+//   name: string;
+//   color?: string;
+// }
+
 export const exportService = {
   async exportToJSON(userId: string) {
     try {
@@ -61,32 +108,32 @@ export const exportService = {
   
   async exportToCSV(userId: string, type: 'tasks' | 'goals' | 'habits' | 'journal') {
     try {
-      let data;
-      let headers;
-      let filename;
+      let data: (Task | Goal | Habit | JournalEntry)[] | undefined;
+      let headers: string[];
+      let filename: string;
 
       switch (type) {
         case 'tasks':
           const { data: tasks } = await taskService.getUserTasks(userId);
-          data = tasks;
+          data = tasks ?? [];
           headers = ['ID', 'Title', 'Description', 'Status', 'Priority', 'Due Date', 'Category', 'Goal'];
           filename = 'tasks';
           break;
         case 'goals':
           const { data: goals } = await goalService.getUserGoals(userId);
-          data = goals;
+          data = goals ?? [];
           headers = ['ID', 'Title', 'Description', 'Status', 'Progress', 'Deadline', 'Category'];
           filename = 'goals';
           break;
         case 'habits':
           const { data: habits } = await habitService.getUserHabits(userId);
-          data = habits;
+          data = habits ?? [];
           headers = ['ID', 'Title', 'Description', 'Frequency', 'Reminder Time', 'Target Count'];
           filename = 'habits';
           break;
         case 'journal':
           const { data: entries } = await journalService.getUserJournalEntries(userId);
-          data = entries;
+          data = entries ?? [];
           headers = ['ID', 'Date', 'Content', 'Mood', 'Tags'];
           filename = 'journal';
           break;
@@ -95,9 +142,10 @@ export const exportService = {
       // Convert data to CSV
       const csvContent = [
         headers.join(','),
-        ...(data || []).map((item: any) => {
+        ...(data || []).map((item: Task | Goal | Habit | JournalEntry) => {
           const values = headers.map(header => {
-            const value = item[header.toLowerCase().replace(/\s+/g, '_')];
+            const key = header.toLowerCase().replace(/\s+/g, '_') as keyof typeof item;
+            const value = item[key];
             return typeof value === 'string' ? `"${value.replace(/"/g, '""')}"` : value;
           });
           return values.join(',');
@@ -195,13 +243,12 @@ export const exportService = {
         { data: goals },
         { data: habits },
         { data: journalEntries },
-        { data: userStats }
+        // Removed userStats since it's not used
       ] = await Promise.all([
         taskService.getUserTasks(userId),
         goalService.getUserGoals(userId),
         habitService.getUserHabits(userId),
         journalService.getUserJournalEntries(userId),
-        userService.getUserStats(userId)
       ]);
 
       // Create PDF document with proper configuration for browser
@@ -239,8 +286,8 @@ export const exportService = {
       doc.setTextColor(0);
       
       // Calculate stats from actual data
-      const completedTasks = tasks?.filter((task: any) => task.status === 'completed').length || 0;
-      const activeGoals = goals?.filter((goal: any) => goal.status === 'active').length || 0;
+      const completedTasks = (tasks as Task[])?.filter((task: Task) => task.status === 'completed').length || 0;
+      const activeGoals = (goals as Goal[])?.filter((goal: Goal) => goal.status === 'active').length || 0;
       
       const stats = [
         ['Total Tasks', tasks?.length || 0],
@@ -268,7 +315,7 @@ export const exportService = {
         doc.text('Tasks Overview', margin, yPos);
         yPos += 10;
 
-        const taskData = tasks.map((task: any) => [
+        const taskData = (tasks as Task[]).map((task: Task) => [
           task.title,
           task.status,
           task.priority,
@@ -300,7 +347,7 @@ export const exportService = {
         doc.text('Goals Progress', margin, yPos);
         yPos += 10;
 
-        const goalData = goals.map((goal: any) => [
+        const goalData = (goals as Goal[]).map((goal: Goal) => [
           goal.title,
           goal.status,
           `${goal.progress || 0}%`,
@@ -332,7 +379,7 @@ export const exportService = {
         doc.text('Habits Tracking', margin, yPos);
         yPos += 10;
 
-        const habitData = habits.map((habit: any) => [
+        const habitData = (habits as Habit[]).map((habit: Habit) => [
           habit.title,
           habit.frequency,
           habit.streak || 0,
@@ -364,7 +411,7 @@ export const exportService = {
         doc.text('Recent Journal Entries', margin, yPos);
         yPos += 10;
 
-        const journalData = journalEntries.slice(0, 10).map((entry: any) => [
+        const journalData = (journalEntries as JournalEntry[]).slice(0, 10).map((entry: JournalEntry) => [
           new Date(entry.entry_date).toLocaleDateString(),
           entry.mood || 'No mood',
           entry.content.substring(0, 50) + '...'

@@ -97,27 +97,34 @@ export async function POST(request: Request) {
           }
         );
     }
-  } catch (error: any) {
+  } catch (error) {
     console.error('AI Agent API Error:', error);
     
     // Log OpenRouter-specific errors
-    if (error?.response) {
-      console.error('OpenRouter API response:', error.response);
+    if (typeof error === 'object' && error !== null && 'response' in error) {
+      console.error('OpenRouter API response:', (error as { response: unknown }).response);
     }
     
-    // Determine if it's a known error type
-    const isKnownError = error instanceof Error && error.message.includes('OpenRouter API error');
+    let errorMessage = 'An unexpected error occurred';
+    let errorStack = undefined;
+    let isKnownError = false;
+
+    if (error instanceof Error) {
+      errorMessage = error.message;
+      errorStack = process.env.NODE_ENV === 'development' ? error.stack : undefined;
+      isKnownError = error.message.includes('OpenRouter API error');
+    }
     
     return NextResponse.json(
       { 
         error: isKnownError ? 'OpenRouter API error' : 'Internal server error',
-        message: error.message || 'An unexpected error occurred',
-        details: process.env.NODE_ENV === 'development' ? error.stack : undefined
+        message: errorMessage,
+        details: errorStack
       },
-      { 
+      {
         status: 500,
         headers: corsHeaders
       }
     );
   }
-} 
+}

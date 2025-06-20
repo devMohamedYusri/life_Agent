@@ -51,21 +51,25 @@ interface Chat {
 
 const MAX_MESSAGES_PER_CHAT = 50
 
+interface User {
+  id: string
+  name?: string
+  email?: string
+}
+
 interface MessageDisplayProps {
   message: Message;
   addTask: ReturnType<typeof useAIAgent>['addTask'];
   addGoal: ReturnType<typeof useAIAgent>['addGoal'];
   addHabit: ReturnType<typeof useAIAgent>['addHabit'];
   addJournalEntry: ReturnType<typeof useAIAgent>['addJournalEntry'];
-  user: any; // Or your specific User type
-  toast: typeof toast; // Use typeof toast to get its type
+  user: User;
+  toast: typeof toast;
   onRejectSuggestion?: (messageId: string, suggestionIndex: number) => void;
 }
 
 // Memoized MessageDisplay component to prevent unnecessary re-renders
-// const MessageDisplay = memo(({ message, addTask, addGoal, addHabit, addJournalEntry, user, toast, onRejectSuggestion }: MessageDisplayProps) => {
-  const MessageDisplay = memo(({ message, addJournalEntry, user, toast, onRejectSuggestion }: MessageDisplayProps) => {
-
+const MessageDisplay = memo(({ message, addJournalEntry, user, toast, onRejectSuggestion }: MessageDisplayProps) => {
   const [isProcessing, setIsProcessing] = useState(false);
   const [animatedIn, setAnimatedIn] = useState(!message.animate); 
   const [displayedContent, setDisplayedContent] = useState(''); // New state for word-by-word display
@@ -191,16 +195,16 @@ interface MessageDisplayProps {
             if (line.match(/\*(.*?)\*/)) {
               return <em key={i}>{line.replace(/\*(.*?)\*/g, '$1')}</em>;
             }
-            if (line.match(/\[(.*?)\]\((.*?)\)/)) {
+            if (line.match(/$$(.*?)$$$$(.*?)$$/)) {
               return (
                 <a
                   key={i}
-                  href={line.match(/\[(.*?)\]\((.*?)\)/)?.[2]}
+                  href={line.match(/$$(.*?)$$$$(.*?)$$/)?.[2]}
                   className="text-blue-500 hover:underline"
                   target="_blank"
                   rel="noopener noreferrer"
                 >
-                  {line.match(/\[(.*?)\]\((.*?)\)/)?.[1]}
+                  {line.match(/$$(.*?)$$$$(.*?)$$/)?.[1]}
                 </a>
               );
             }
@@ -299,11 +303,11 @@ export default function AIPlansPage() {
       const savedChats = localStorage.getItem(`ai-chats-${user.id}`)
       if (savedChats) {
         const parsedChats = JSON.parse(savedChats)
-        setChats(parsedChats.map((chat: any) => ({
+        setChats(parsedChats.map((chat: Chat) => ({
           ...chat,
           createdAt: new Date(chat.createdAt),
           updatedAt: new Date(chat.updatedAt),
-          messages: chat.messages.map((msg: any) => ({
+          messages: chat.messages.map((msg: Message) => ({
             ...msg,
             timestamp: new Date(msg.timestamp)
           }))
@@ -431,7 +435,7 @@ export default function AIPlansPage() {
       // Add AI response to chat
       let finalMessages = [...updatedChat.messages, assistantMessage];
 
-      // Enforce MAX_MMESSAGES_PER_CHAT limit for AI response
+      // Enforce MAX_MESSAGES_PER_CHAT limit for AI response
       if (finalMessages.length > MAX_MESSAGES_PER_CHAT) {
         finalMessages = finalMessages.slice(1); // Remove the oldest message
       }
@@ -465,46 +469,6 @@ export default function AIPlansPage() {
       setCurrentChat(finalChat)
     } finally {
       setIsLoading(false)
-    }
-  }
-
-  const handleSuggestionAction = async (suggestion: Suggestion, action: 'accept' | 'reject') => {
-    if (!user || action === 'reject') return
-
-    try {
-      switch (suggestion.type) {
-        case 'task':
-          await taskService.createTask({
-            user_id: user.id,
-            title: suggestion.title,
-            description: suggestion.description,
-            priority: suggestion.priority || 'medium',
-            due_date: suggestion.dueDate,
-            status: 'pending'
-          })
-          break
-        case 'goal':
-          await goalService.createGoal({
-            user_id: user.id,
-            title: suggestion.title,
-            description: suggestion.description,
-            priority: suggestion.priority || 'medium',
-            goal_type: 'short-term',
-            status: 'active'
-          })
-          break
-        case 'habit':
-          await habitService.createHabit({
-            user_id: user.id,
-            title: suggestion.title,
-            description: suggestion.description,
-            frequency: suggestion.frequency || 'daily',
-            target_count: suggestion.targetCount || 1
-          })
-          break
-      }
-    } catch (error) {
-      console.error('Error creating item:', error)
     }
   }
 

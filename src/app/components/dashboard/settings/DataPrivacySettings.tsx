@@ -59,9 +59,9 @@ export default function DataPrivacySettings({ userProfile, notificationSettings,
       URL.revokeObjectURL(url)
       
       onMessage('Data exported successfully!')
-    } catch (error: any) {
+    } catch (error) {
       console.error('Error exporting data:', error)
-      onMessage(`Error exporting data: ${error.message || 'Please try again.'}`, true)
+      onMessage(`Error exporting data: ${(error instanceof Error) ? error.message : 'Please try again.'}`, true);
     } finally {
       setLoading(false)
     }

@@ -185,6 +185,7 @@ class AIService {
         };
       } catch (e) {
         // If parsing fails, return the raw content
+        console.log("here is the error habbened ",e)
         return {
           content: content,
           suggestions: []

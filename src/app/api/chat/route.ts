@@ -1,10 +1,24 @@
 import { freeModels } from '@//models';
 import { NextResponse } from 'next/server';
+import { Task, Goal, Habit, JournalEntry } from '../../lib/export';
 
 const OPENROUTER_API_KEY = process.env.OPENROUTER_API_KEY;
 const OPENROUTER_API_URL = 'https://openrouter.ai/api/v1/chat/completions';
 
 const MODELS =freeModels
+
+interface ChatMessage {
+    role: string;
+    content: string;
+}
+
+interface ChatContext {
+    recentMessages?: ChatMessage[];
+    recentTasks?: Task[];
+    recentGoals?: Goal[];
+    recentHabits?: Habit[];
+    recentJournalEntries?: JournalEntry[];
+}
 
 // interface Suggestion {
 //     type: 'task' | 'goal' | 'habit' | 'journal';
@@ -15,7 +29,7 @@ const MODELS =freeModels
 //     frequency?: string;
 // }
 
-async function tryModel(model: string, message: string, context: any, origin: string) {
+async function tryModel(model: string, message: string, context: ChatContext, origin: string) {
     // Prepare messages array with system message and chat history
     const messages = [
         {
@@ -48,7 +62,7 @@ If the user's request is ambiguous, use your best judgment to create the most li
     ];
 
     // Add chat history if available
-    if (context?.recentMessages?.length > 0) {
+    if (context?.recentMessages && context.recentMessages.length > 0) {
         messages.push(...context.recentMessages);
     }
 
@@ -124,7 +138,7 @@ export async function POST(request: Request) {
     }
 
     try {
-        const { message, context } = await request.json();
+        const { message, context } : { message: string; context: ChatContext } = await request.json();
 
         if (!message) {
             return NextResponse.json(

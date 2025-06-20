@@ -18,6 +18,7 @@ interface ProfileSettingsProps {
   initialProfile: UserProfile;
   onProfileUpdate: (updatedProfile: UserProfile) => void;
   onMessage: (message: string, isError?: boolean) => void;
+  loading: boolean;
 }
 
 export default function ProfileSettings({ initialProfile, onProfileUpdate, onMessage }: ProfileSettingsProps) {
@@ -44,9 +45,9 @@ export default function ProfileSettings({ initialProfile, onProfileUpdate, onMes
       
       onMessage('Profile updated successfully!')
       onProfileUpdate(profile); // Notify parent of updated profile
-    } catch (error: any) {
+    } catch (error) {
       console.error('Error updating profile:', error)
-      onMessage(`Error updating profile: ${error.message || 'Please try again.'}`, true)
+      onMessage(`Error updating profile: ${(error instanceof Error) ? error.message : 'Please try again.'}`, true);
     } finally {
       setLoading(false)
     }

@@ -31,9 +31,9 @@ export default function SecuritySettings({ onMessage }: SecuritySettingsProps) {
       await userService.deleteAccount(user.id)
       onMessage('Account deleted successfully. Signing out...')
       await signOut()
-    } catch (error: any) {
+    } catch (error) {
       console.error('Error deleting account:', error)
-      onMessage(`Error deleting account: ${error.message || 'Please try again.'}`, true)
+      onMessage(`Error deleting account: ${(error instanceof Error) ? error.message : 'Please try again.'}`, true);
     } finally {
       setLoading(false)
     }
