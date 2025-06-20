@@ -1,7 +1,8 @@
 import {client} from "../supabase"
-import { Database } from "../../../types/supabase"
+import { Database } from "../../types/supabase"
+import { notificationService } from "./notifications";
 
-export type Task = Database['public']['Tables']['tasks']['Row']
+export type Task = Database['public']['Tables']['tasks']['Row'] & { user_id: string, title: string };
 
 export const taskService={
     //get all tasks for user
@@ -90,6 +91,17 @@ export const taskService={
           `)
         .single()
 
+        if (data) {
+            await notificationService.create({
+                user_id: data.user_id,
+                type: 'general',
+                title: 'New Task Created',
+                message: `You've added a new task: "${data.title}"`,
+                entity_id: data.task_id,
+                entity_type: 'task',
+            });
+        }
+
         return {data,error}
     },
 
@@ -105,6 +117,17 @@ export const taskService={
             goal:goals(goal_id, title)
           `)
         .single()
+
+        if (data) {
+            await notificationService.create({
+                user_id: data.user_id,
+                type: 'achievement',
+                title: 'Task Completed!',
+                message: `Great job! You finished: "${data.title}"`,
+                entity_id: data.task_id,
+                entity_type: 'task',
+            });
+        }
 
         return {data,error}
     },
@@ -132,6 +155,17 @@ export const taskService={
         .eq('task_id',taskId)
         .select()
         .single()
+
+        if (data) {
+            await notificationService.create({
+                user_id: data.user_id,
+                type: 'achievement',
+                title: 'Task Completed!',
+                message: `Great job! You finished: "${data.title}"`,
+                entity_id: data.task_id,
+                entity_type: 'task',
+            });
+        }
 
         return {data,error}
     },

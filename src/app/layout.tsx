@@ -1,8 +1,9 @@
-
 import type { Metadata,Viewport } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
 import { AuthProvider } from "./providers/AuthProvider";
+import { Toaster } from 'react-hot-toast';
+
 const geistSans = Geist({
   variable: "--font-geist-sans",
   subsets: ["latin"],
@@ -26,19 +27,21 @@ export const viewport: Viewport = {
   maximumScale: 1,
   themeColor: '#000000',
 }
+
 export default function RootLayout({
   children,
 }: Readonly<{
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="en">
+    <html lang="en" className="h-full">
       <body
-        className={`${geistSans.variable} ${geistMono.variable} antialiased`}
+        className={`${geistSans.variable} ${geistMono.variable} antialiased h-full`}
       >
         <AuthProvider>
            {children}
         </AuthProvider>
+        <Toaster position="top-right" />
       </body>
     </html>
   );

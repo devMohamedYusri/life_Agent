@@ -5,6 +5,7 @@ import { journalService } from "../../lib/database/journal";
 import { taskService } from "../../lib/database/tasks";
 import { goalService } from "../../lib/database/goals";
 import { habitService } from "../../lib/database/habits";
+import { exportService } from '../../lib/export';
 
 interface Stats {
   totalGoals: number;
@@ -563,16 +564,24 @@ export default function AnalysisPage() {
           </div>
           <div className="flex space-x-3">
             <button
-              onClick={() => {
-                console.log("Exporting CSV...");
+              onClick={async () => {
+                try {
+                  await exportService.exportToCSV(user!.id, 'tasks');
+                } catch (error) {
+                  console.error('Error exporting CSV:', error);
+                }
               }}
               className="px-4 py-2 bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 rounded-md hover:bg-gray-200 dark:hover:bg-gray-600 font-medium transition-colors"
             >
               Export as CSV
             </button>
             <button
-              onClick={() => {
-                console.log("Generating PDF...");
+              onClick={async () => {
+                try {
+                  await exportService.exportToPDF(user!.id);
+                } catch (error) {
+                  console.error('Error generating PDF:', error);
+                }
               }}
               className="px-4 py-2 bg-purple-600 dark:bg-purple-500 text-white rounded-md hover:bg-purple-700 dark:hover:bg-purple-600 font-medium transition-colors"
             >
@@ -623,41 +632,54 @@ export default function AnalysisPage() {
           <h3 className="text-lg font-semibold mb-4 dark:text-white">
             Time Distribution
           </h3>
-          <div className="relative h-48">
-            <div className="absolute inset-0 flex items-center justify-center">
-              <div className="text-center">
-                <p className="text-3xl font-bold text-gray-900 dark:text-white">
-                  168
-                </p>
-                <p className="text-sm text-gray-600 dark:text-gray-400">
-                  hours/week
-                </p>
+          <div className="flex items-center gap-8">
+            <div className="relative w-40 h-40">
+              <svg className="w-full h-full transform -rotate-90">
+                <circle
+                  cx="80"
+                  cy="80"
+                  r="72"
+                  stroke="currentColor"
+                  className="text-gray-200 dark:text-gray-700"
+                  strokeWidth="8"
+                  fill="none"
+                />
+                <circle
+                  cx="80"
+                  cy="80"
+                  r="72"
+                  stroke="currentColor"
+                  className="text-purple-600 dark:text-purple-400"
+                  strokeWidth="8"
+                  fill="none"
+                  strokeDasharray={`${2 * Math.PI * 72 * (getTrackedTimePercentage() / 100)} ${2 * Math.PI * 72}`}
+                />
+              </svg>
+              <div className="absolute inset-0 flex items-center justify-center">
+                <div className="text-center">
+                  <p className="text-3xl font-bold text-gray-900 dark:text-white">
+                    {getTrackedTimePercentage()}%
+                  </p>
+                  <p className="text-sm text-gray-600 dark:text-gray-400">
+                    tracked
+                  </p>
+                </div>
               </div>
             </div>
-            <svg className="w-full h-full transform -rotate-90">
-              <circle
-                cx="96"
-                cy="96"
-                r="80"
-                stroke="currentColor"
-                className="text-gray-200 dark:text-gray-700"
-                strokeWidth="16"
-                fill="none"
-              />
-              <circle
-                cx="96"
-                cy="96"
-                r="80"
-                stroke="currentColor"
-                className="text-purple-600 dark:text-purple-400"
-                strokeWidth="16"
-                fill="none"
-                strokeDasharray={`${2 * Math.PI * 80 * (getTrackedTimePercentage() / 100)} ${2 * Math.PI * 80}`}
-              />
-            </svg>
-          </div>
-          <div className="mt-4 text-center text-sm text-gray-600 dark:text-gray-400">
-            {getTrackedTimePercentage()}% of time on tracked activities
+            <div className="flex-1">
+              <div className="space-y-4">
+                <div className="flex items-center justify-between p-3 bg-gray-50 dark:bg-gray-700 rounded-lg">
+                  <span className="text-gray-600 dark:text-gray-300">Total weekly hours</span>
+                  <span className="font-semibold text-gray-900 dark:text-white">168</span>
+                </div>
+                <div className="flex items-center justify-between p-3 bg-gray-50 dark:bg-gray-700 rounded-lg">
+                  <span className="text-gray-600 dark:text-gray-300">Tracked hours</span>
+                  <span className="font-semibold text-gray-900 dark:text-white">
+                    {Math.round(168 * (getTrackedTimePercentage() / 100))}
+                  </span>
+                </div>
+              </div>
+            </div>
           </div>
         </div>
 

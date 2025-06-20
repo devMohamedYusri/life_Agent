@@ -46,9 +46,9 @@ export function AIInsights() {
       ]);
 
       setInsights({
-        recommendations: recommendations || 'Unable to generate recommendations',
-        moodAnalysis: moodAnalysis || 'Unable to analyze mood patterns',
-        motivation: motivation || 'Stay focused and keep moving forward!',
+        recommendations: recommendations.content || 'Unable to generate recommendations',
+        moodAnalysis: moodAnalysis.content || 'Unable to analyze mood patterns',
+        motivation: motivation.content || 'Stay focused and keep moving forward!',
         loading: false
       });
     } catch (error) {

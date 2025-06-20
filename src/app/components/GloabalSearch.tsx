@@ -69,19 +69,24 @@ export function GlobalSearch() {
     router.push(`/dashboard/${result.type}s`)
     setIsOpen(false)
     setQuery('')
-  }, [router, setIsOpen, setQuery]);
+    setResults([])
+  }, [router]);
 
   // Close on click outside
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
       if (searchRef.current && !searchRef.current.contains(event.target as Node)) {
         setIsOpen(false)
+        setQuery('')
+        setResults([])
       }
     }
 
-    document.addEventListener('mousedown', handleClickOutside)
-    return () => document.removeEventListener('mousedown', handleClickOutside)
-  }, [setIsOpen])
+    if (isOpen) {
+      document.addEventListener('mousedown', handleClickOutside)
+      return () => document.removeEventListener('mousedown', handleClickOutside)
+    }
+  }, [isOpen])
 
   // Keyboard shortcuts
   useEffect(() => {
@@ -90,12 +95,14 @@ export function GlobalSearch() {
       if ((event.metaKey || event.ctrlKey) && event.key === 'k') {
         event.preventDefault()
         setIsOpen(true)
-        inputRef.current?.focus()
+        setTimeout(() => inputRef.current?.focus(), 100)
       }
 
       // Escape to close
-      if (event.key === 'Escape') {
+      if (event.key === 'Escape' && isOpen) {
         setIsOpen(false)
+        setQuery('')
+        setResults([])
       }
 
       // Arrow navigation
@@ -222,12 +229,8 @@ export function GlobalSearch() {
   )
 
   useEffect(() => {
-    if (query.length > 2) {
-      const timeoutId = setTimeout(() => {
-        performSearch(query)
-      }, 300)
-
-      return () => clearTimeout(timeoutId)
+    if (query.length >= 2) {
+      performSearch(query)
     } else {
       setResults([])
     }
@@ -294,9 +297,12 @@ export function GlobalSearch() {
   }
 
   return (
-    <div className="relative">
+    <>
       <button
-        onClick={() => setIsOpen(true)}
+        onClick={() => {
+          setIsOpen(true)
+          setTimeout(() => inputRef.current?.focus(), 100)
+        }}
         className="flex items-center space-x-2 px-4 py-2 rounded-md bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors"
       >
         <Search className="w-4 h-4" />
@@ -305,80 +311,140 @@ export function GlobalSearch() {
       </button>
 
       {isOpen && (
-        <div
-          ref={searchRef}
-          className="fixed inset-0 z-50 flex items-start justify-center p-4 sm:p-0 backdrop-blur-sm bg-black/50"
-        >
-          <div className="bg-white dark:bg-gray-900 rounded-lg shadow-xl w-full max-w-xl mt-16 transform transition-all duration-300 ease-out scale-95 opacity-0 animate-scale-in-out">
-            <div className="flex items-center border-b dark:border-gray-700 p-4">
-              <Search className="w-5 h-5 text-gray-500 dark:text-gray-400 mr-3" />
-              <input
-                ref={inputRef}
-                type="text"
-                placeholder="Search tasks, goals, habits, journal entries..."
-                className="flex-1 bg-transparent outline-none text-lg text-gray-900 dark:text-white placeholder-gray-400 dark:placeholder-gray-500"
-                value={query}
-                onChange={e => setQuery(e.target.value)}
-              />
-              {loading && <Clock className="w-5 h-5 animate-spin text-gray-500 dark:text-gray-400 ml-3" />}
-              <button onClick={() => setIsOpen(false)} className="ml-3 text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300">
-                <X className="w-5 h-5" />
-              </button>
-            </div>
-
-            <div className="p-4 max-h-[400px] overflow-y-auto">
-              {query.length > 0 && results.length === 0 && !loading && (
-                <p className="text-center text-gray-500 dark:text-gray-400 py-8">No results found for &quot;{query}&quot;.</p>
-              )}
-
-              {query.length < 2 && !loading && (
-                <p className="text-center text-gray-500 dark:text-gray-400 py-8">Type at least 2 characters to search.</p>
-              )}
-
-              {results.map((result, index) => (
-                <div
-                  key={result.id}
-                  className={`flex items-center p-3 rounded-lg cursor-pointer ${selectedIndex === index ? 'bg-gray-100 dark:bg-gray-700' : 'hover:bg-gray-50 dark:hover:bg-gray-800'}`}
-                  onClick={() => handleResultClick(result)}
+        <>
+          {/* Backdrop - separate from the search modal */}
+          <div 
+            className="fixed inset-0 z-40 bg-black/20 backdrop-blur-sm"
+            onClick={() => {
+              setIsOpen(false)
+              setQuery('')
+              setResults([])
+            }}
+          />
+          
+          {/* Search Modal */}
+          <div className="fixed inset-x-0 top-0 z-50 flex justify-center p-4 sm:p-6 md:p-20">
+            <div
+              ref={searchRef}
+              className="relative w-full max-w-xl bg-white dark:bg-gray-900 rounded-lg shadow-xl transform transition-all duration-200 ease-out"
+              style={{
+                animation: 'slideDown 0.2s ease-out'
+              }}
+            >
+              <div className="flex items-center border-b dark:border-gray-700 p-4">
+                <Search className="w-5 h-5 text-gray-500 dark:text-gray-400 mr-3 flex-shrink-0" />
+                <input
+                  ref={inputRef}
+                  type="text"
+                  placeholder="Search tasks, goals, habits, journal entries..."
+                  className="flex-1 bg-transparent outline-none text-lg text-gray-900 dark:text-white placeholder-gray-400 dark:placeholder-gray-500"
+                  value={query}
+                  onChange={e => setQuery(e.target.value)}
+                  autoFocus
+                />
+                {loading && <Clock className="w-5 h-5 animate-spin text-gray-500 dark:text-gray-400 ml-3" />}
+                <button 
+                  onClick={() => {
+                    setIsOpen(false)
+                    setQuery('')
+                    setResults([])
+                  }} 
+                  className="ml-3 text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300 p-1 rounded hover:bg-gray-100 dark:hover:bg-gray-800"
                 >
-                  <div className="flex-shrink-0 mr-3 text-gray-500 dark:text-gray-400">
-                    {getIcon(result.type)}
-                  </div>
-                  <div className="flex-1">
-                    <p className="font-medium text-gray-800 dark:text-gray-100">{result.title}</p>
-                    {result.description && (
-                      <p className="text-sm text-gray-600 dark:text-gray-400 line-clamp-1">{result.description}</p>
-                    )}
-                    <div className="text-xs mt-1 flex items-center space-x-2">
-                      {result.status && (
-                        <span className={`font-medium ${getStatusColor(result)}`}>
-                          {result.status.charAt(0).toUpperCase() + result.status.slice(1)}
-                        </span>
-                      )}
-                      {result.priority && (
-                        <span className={`font-medium ${getPriorityColor(result.priority)}`}>
-                          {result.priority.charAt(0).toUpperCase() + result.priority.slice(1)} Priority
-                        </span>
-                      )}
-                      {result.mood && (
-                        <span className={`font-medium ${getMoodColor(result.mood)}`}>
-                          Mood: {result.mood.charAt(0).toUpperCase() + result.mood.slice(1)}
-                        </span>
-                      )}
-                      {result.date && (
-                        <span className="text-gray-500 dark:text-gray-400">
-                          {new Date(result.date).toLocaleDateString()}
-                        </span>
-                      )}
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
+
+              <div className="max-h-[400px] overflow-y-auto">
+                {query.length > 0 && results.length === 0 && !loading && (
+                  <p className="text-center text-gray-500 dark:text-gray-400 py-8">
+                    No results found for &quot;{query}&quot;
+                  </p>
+                )}
+
+                {query.length === 0 && (
+                  <div className="p-6 text-center text-gray-500 dark:text-gray-400">
+                    <p className="mb-4">Quick search across your workspace</p>
+                    <div className="flex flex-wrap gap-2 justify-center text-xs">
+                      <span className="px-2 py-1 rounded bg-gray-100 dark:bg-gray-800">Tasks</span>
+                      <span className="px-2 py-1 rounded bg-gray-100 dark:bg-gray-800">Goals</span>
+                      <span className="px-2 py-1 rounded bg-gray-100 dark:bg-gray-800">Habits</span>
+                      <span className="px-2 py-1 rounded bg-gray-100 dark:bg-gray-800">Journal</span>
                     </div>
                   </div>
-                  <ArrowRight className="w-4 h-4 text-gray-400 ml-3" />
-                </div>
-              ))}
+                )}
+
+                {results.length > 0 && (
+                  <div className="p-2">
+                    {results.map((result, index) => (
+                      <div
+                        key={result.id}
+                        className={`flex items-center p-3 rounded-lg cursor-pointer transition-colors ${
+                          selectedIndex === index 
+                            ? 'bg-gray-100 dark:bg-gray-800' 
+                            : 'hover:bg-gray-50 dark:hover:bg-gray-800'
+                        }`}
+                        onClick={() => handleResultClick(result)}
+                        onMouseEnter={() => setSelectedIndex(index)}
+                      >
+                        <div className="flex-shrink-0 mr-3 text-gray-500 dark:text-gray-400">
+                          {getIcon(result.type)}
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <p className="font-medium text-gray-800 dark:text-gray-100 truncate">
+                            {result.title}
+                          </p>
+                          {result.description && (
+                            <p className="text-sm text-gray-600 dark:text-gray-400 line-clamp-1">
+                              {result.description}
+                            </p>
+                          )}
+                          <div className="text-xs mt-1 flex items-center space-x-2">
+                            {result.status && (
+                              <span className={`font-medium ${getStatusColor(result)}`}>
+                                {result.status.charAt(0).toUpperCase() + result.status.slice(1)}
+                              </span>
+                            )}
+                            {result.priority && (
+                              <span className={`font-medium ${getPriorityColor(result.priority)}`}>
+                                {result.priority.charAt(0).toUpperCase() + result.priority.slice(1)} Priority
+                              </span>
+                            )}
+                            {result.mood && (
+                              <span className={`font-medium ${getMoodColor(result.mood)}`}>
+                                Mood: {result.mood.charAt(0).toUpperCase() + result.mood.slice(1)}
+                              </span>
+                            )}
+                            {result.date && (
+                              <span className="text-gray-500 dark:text-gray-400">
+                                {new Date(result.date).toLocaleDateString()}
+                              </span>
+                            )}
+                          </div>
+                        </div>
+                        <ArrowRight className="w-4 h-4 text-gray-400 ml-3 flex-shrink-0" />
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
             </div>
           </div>
-        </div>
+        </>
       )}
-    </div>
+
+<style jsx>{`
+        @keyframes slideDown {
+          from {
+            opacity: 0;
+            transform: translateY(-10px);
+          }
+          to {
+            opacity: 1;
+            transform: translateY(0);
+          }
+        }
+      `}</style>
+    </>
   )
 }

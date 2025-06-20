@@ -1,5 +1,5 @@
 import {client} from '../supabase'
-import { Database } from "../../../types/supabase"
+import { Database } from "../../types/supabase"
 
 export type Goal = Database['public']['Tables']['goals']['Row']
 

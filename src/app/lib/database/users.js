@@ -106,14 +106,35 @@ export const userService={
 
   
    async updateProfile(userId, updates) {
+    // First check if profile exists
+    const { data: existingProfile } = await client
+      .from('user_profiles')
+      .select('id')
+      .eq('id', userId)
+      .single();
+
+    if (!existingProfile) {
+      // Create new profile if it doesn't exist
+      const { data, error } = await client
+        .from('user_profiles')
+        .insert([{ id: userId, ...updates }])
+        .select()
+        .single();
+
+      if (error) throw error;
+      return { data };
+    }
+
+    // Update existing profile
     const { data, error } = await client
       .from('user_profiles')
       .update(updates)
       .eq('id', userId)
-      .single()
+      .select()
+      .single();
 
-    if (error) throw error
-    return { data }
+    if (error) throw error;
+    return { data };
   },
 
   async deleteAccount(userId) {

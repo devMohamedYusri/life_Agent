@@ -1,5 +1,5 @@
-import { client } from '@//lib/supabase'
-import { Database } from '../../../types/supabase'
+import { client } from '../supabase'
+import { Database } from '../../types/supabase'
 
 export type Habit = Database['public']['Tables']['habits']['Row']
 export type HabitCompletion = Database['public']['Tables']['habit_completions']['Row']

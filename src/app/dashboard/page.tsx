@@ -1,10 +1,12 @@
 // app/dashboard/page.tsx
 "use client";
 
-import { useState, useEffect } from "react";
+import React, { useState, useEffect } from "react";
 import { useAuthStore } from "../lib/stores/authStore";
 import { userService } from "../lib/database/users";
 import { taskService } from "../lib/database/tasks";
+import { habitService, Habit } from "../lib/database/habits";
+import { goalService, Goal } from "../lib/database/goals";
 import { NotificationManager } from "../lib/database/notifications";
 import {
   CheckCircle,
@@ -13,8 +15,16 @@ import {
   Calendar,
   Bell,
   Zap,
+  Sparkles,
+  RefreshCw
 } from "lucide-react";
 import Link from "next/link";
+import { Input } from '@appcomponents/ui/input';
+import { Button } from '../components/ui/button';
+import { SmartInputModal } from '../components/ai/SmartInputModal';
+import { AISuggestion } from '../types/ai-agent';
+import { aiService } from "../lib/ai";
+import { v4 as generateUUID } from 'uuid';
 
 interface Task {
   task_id: string;
@@ -49,12 +59,24 @@ interface DashboardStats {
   totalHabits: number;
 }
 
+// Add this interface for stored suggestions
+interface StoredSuggestions {
+  suggestions: AISuggestion[];
+  timestamp: number;
+}
+
 export default function DashboardHome() {
   const { user } = useAuthStore();
   const [greeting, setGreeting] = useState("");
   const [stats, setStats] = useState<DashboardStats | null>(null);
   const [todayTasks, setTodayTasks] = useState<Task[]>([]);
   const [upcomingDeadlines, setUpcomingDeadlines] = useState<Task[]>([]);
+  const [habits, setHabits] = useState<Habit[]>([]);
+  const [goals, setGoals] = useState<Goal[]>([]);
+  const [userPrompt, setUserPrompt] = useState("");
+  const [showAiSuggestionsModal, setShowAiSuggestionsModal] = useState(false);
+  const [dailySuggestions, setDailySuggestions] = useState<AISuggestion[]>([]);
+  const [isLoadingSuggestions, setIsLoadingSuggestions] = useState(false);
 
   useEffect(() => {
     if (user) {
@@ -69,6 +91,7 @@ export default function DashboardHome() {
     else if (hour < 18) setGreeting("Good afternoon");
     else setGreeting("Good evening");
   }, []);
+
   const loadDashboardData = async () => {
     try {
       // Load stats
@@ -84,7 +107,14 @@ export default function DashboardHome() {
 
       setTodayTasks(todaysTasks)
 
-  
+      // Load habits
+      const { data: userHabits } = await habitService.getUserHabits(user!.id);
+      setHabits(userHabits || []);
+
+      // Load goals
+      const { data: userGoals } = await goalService.getUserGoals(user!.id);
+      setGoals(userGoals || []);
+
       // Load upcoming deadlines
       const upcoming = tasks?.filter((task: Task) => {
         if (!task.due_date || task.completed) return false
@@ -110,8 +140,248 @@ export default function DashboardHome() {
     }
   };
 
+  const aiContext = {
+    recentTasks: todayTasks.map(task => ({
+      id: task.task_id || task.id || '',
+      title: task.title,
+      completed: task.completed,
+      dueDate: task.due_date ? new Date(task.due_date).toDateString() : undefined
+    })),
+    recentHabits: habits.map(habit => ({
+      id: habit.habit_id,
+      name: habit.title,
+      streak: 0,
+      frequency: habit.frequency || 'daily'
+    })),
+    recentGoals: goals.map(goal => ({
+      id: goal.goal_id,
+      title: goal.title,
+      progress: goal.progress || 0,
+      targetDate: goal.deadline ? new Date(goal.deadline).toDateString() : undefined
+    }))
+  };
+
+  const handleUserPromptSubmit = () => {
+    setShowAiSuggestionsModal(true);
+  };
+
+  const handleSuggestionsAccepted = async (suggestions: AISuggestion[]) => {
+    if (!user || !user.id) {
+      console.error("User not authenticated.");
+      alert("Please log in to accept suggestions.");
+      return;
+    }
+
+    for (const suggestion of suggestions) {
+      try {
+        switch (suggestion.type) {
+          case 'task':
+            await taskService.createTask({
+              user_id: user.id,
+              title: suggestion.title,
+              description: suggestion.description,
+              priority: suggestion.priority,
+              due_date: suggestion.dueDate || null, // Ensure string or null
+              is_completed: suggestion.completed || false,
+              status: suggestion.status === 'in-progress' ? 'in_progress' : (suggestion.status === 'archived' ? 'pending' : suggestion.status || 'pending'),
+            });
+            console.log('Task accepted and saved:', suggestion.title);
+            break;
+          case 'habit':
+            await habitService.createHabit({
+              user_id: user.id,
+              title: suggestion.title,
+              description: suggestion.description || null,
+              frequency: suggestion.frequency || 'daily',
+              reminder_time: suggestion.reminderTime || null,
+              target_count: suggestion.targetCount || 0,
+              is_ai_suggested: true,
+            });
+            console.log('Habit accepted and saved:', suggestion.title);
+            break;
+          case 'goal':
+            // Map AI suggestion status to valid goal statuses
+            let goalStatus: "active" | "completed" | "paused" | "cancelled" = "active";
+            if (suggestion.status === 'completed') {
+              goalStatus = 'completed';
+            } else if (suggestion.status === 'archived') {
+              goalStatus = 'paused';
+            } else if (suggestion.status === 'pending' || suggestion.status === 'in-progress') {
+              goalStatus = 'active';
+            }
+
+            // Map AI suggestion goal type to valid goal types
+            let goalType: "long-term" | "short-term" = "long-term";
+            if (suggestion.goalType === 'short-term') {
+              goalType = 'short-term';
+            } else if (suggestion.goalType === 'long-term') {
+              goalType = 'long-term';
+            }
+
+            await goalService.createGoal({
+              user_id: user.id,
+              title: suggestion.title,
+              description: suggestion.description || null,
+              deadline: suggestion.targetDate || null,
+              progress: suggestion.progress || 0,
+              status: goalStatus,
+              goal_type: goalType,
+            });
+            console.log('Goal accepted and saved:', suggestion.title);
+            break;
+          default:
+            console.warn('Unknown suggestion type:', suggestion.type);
+        }
+
+        // If there are sub-suggestions, recursively accept them
+        if (suggestion.subSuggestions && suggestion.subSuggestions.length > 0) {
+          await handleSuggestionsAccepted(suggestion.subSuggestions);
+        }
+
+      } catch (error) {
+        console.error(`Error accepting ${suggestion.type} '${suggestion.title}':`, error);
+        alert(`Failed to accept ${suggestion.type}: ${suggestion.title}. Please try again.`);
+      }
+    }
+    
+    loadDashboardData(); // Reload data after changes
+  };
+
+  // Function to check if suggestions are from today
+  const isSuggestionsFromToday = (timestamp: number): boolean => {
+    const today = new Date();
+    const suggestionDate = new Date(timestamp);
+    return (
+      suggestionDate.getDate() === today.getDate() &&
+      suggestionDate.getMonth() === today.getMonth() &&
+      suggestionDate.getFullYear() === today.getFullYear()
+    );
+  };
+
+  // Function to load suggestions from storage
+  const loadStoredSuggestions = (): StoredSuggestions | null => {
+    if (typeof window === 'undefined') return null;
+    const stored = localStorage.getItem('dailySuggestions');
+    if (!stored) return null;
+    try {
+      return JSON.parse(stored);
+    } catch (e) {
+      console.error('Error parsing stored suggestions:', e);
+      return null;
+    }
+  };
+
+  // Function to save suggestions to storage
+  const saveSuggestions = (suggestions: AISuggestion[]) => {
+    if (typeof window === 'undefined') return;
+    const storedData: StoredSuggestions = {
+      suggestions,
+      timestamp: Date.now()
+    };
+    localStorage.setItem('dailySuggestions', JSON.stringify(storedData));
+  };
+
+  const loadDailySuggestions = async () => {
+    if (!user) return;
+    
+    // Check if we have stored suggestions from today
+    const stored = loadStoredSuggestions();
+    if (stored && isSuggestionsFromToday(stored.timestamp)) {
+      setDailySuggestions(stored.suggestions);
+      return;
+    }
+    
+    setIsLoadingSuggestions(true);
+    try {
+      const [tasks, goals, habits] = await Promise.all([
+        taskService.getUserTasks(user.id),
+        goalService.getUserGoals(user.id),
+        habitService.getUserHabits(user.id)
+      ]);
+
+      const response = await aiService.generateTaskRecommendations({
+        tasks: tasks.data || [],
+        goals: goals.data || [],
+        completionRate: calculateCompletionRate(tasks.data || [])
+      });
+
+      if (response.suggestions && response.suggestions.length > 0) {
+        // Map the AI service suggestions to the expected AISuggestion type
+        const mappedSuggestions: AISuggestion[] = response.suggestions.map((suggestion: {
+          type: string;
+          title: string;
+          description?: string;
+          priority?: string;
+          dueDate?: string;
+          frequency?: string;
+          targetCount?: number;
+        }) => ({
+          id: generateUUID(),
+          type: suggestion.type as 'task' | 'habit' | 'goal',
+          title: suggestion.title,
+          description: suggestion.description || 'No description provided',
+          priority: (suggestion.priority || 'medium') as 'high' | 'medium' | 'low',
+          reason: 'AI generated suggestion based on your current activities',
+          // Optional fields
+          dueDate: suggestion.dueDate,
+          completed: false,
+          frequency: suggestion.frequency as 'daily' | 'weekly' | 'monthly' | undefined,
+          reminderTime: undefined,
+          targetCount: suggestion.targetCount,
+          targetDate: undefined,
+          progress: 0,
+          goalType: undefined,
+          status: 'pending',
+          subSuggestions: []
+        }));
+        setDailySuggestions(mappedSuggestions);
+        saveSuggestions(mappedSuggestions);
+      } else {
+        setDailySuggestions([]);
+        saveSuggestions([]);
+      }
+    } catch (error) {
+      console.error('Error loading daily suggestions:', error);
+      setDailySuggestions([]);
+      saveSuggestions([]);
+    } finally {
+      setIsLoadingSuggestions(false);
+    }
+  };
+
+  const calculateCompletionRate = (tasks: Task[]) => {
+    if (!tasks.length) return 0;
+    const completedTasks = tasks.filter(task => task.completed).length;
+    return Math.round((completedTasks / tasks.length) * 100);
+  };
+
+  useEffect(() => {
+    if (user) {
+      loadDailySuggestions();
+    }
+  }, [user]);
+
   return (
-    <div>
+    <div className="container mx-auto px-4 py-8">
+      <div className="flex justify-between items-center mb-8">
+        <h1 className="text-2xl font-bold text-gray-900 dark:text-white">
+          Dashboard
+        </h1>
+        <div className="flex items-center gap-2">
+          <Input
+            type="text"
+            placeholder="Ask SelfPilot anything..."
+            value={userPrompt}
+            onChange={(e: React.ChangeEvent<HTMLInputElement>) => setUserPrompt(e.target.value)}
+            className="flex-grow max-w-sm"
+          />
+          <Button onClick={handleUserPromptSubmit} disabled={!userPrompt.trim()}>
+            <Sparkles className="w-4 h-4 mr-2" />
+            Ask
+          </Button>
+        </div>
+      </div>
+
       {/* Welcome Section */}
       <div className="mb-8">
         <h1 className="text-3xl font-bold text-gray-900 dark:text-white">
@@ -202,7 +472,7 @@ export default function DashboardHome() {
         </Link>
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
         {/* Today's Tasks */}
         <div className="bg-white dark:bg-gray-800 rounded-lg shadow p-6">
           <div className="flex items-center justify-between mb-4">
@@ -304,6 +574,76 @@ export default function DashboardHome() {
             </div>
           )}
         </div>
+
+        {/* Daily AI Suggestions */}
+        <div className="md:col-span-2 lg:col-span-3 bg-white dark:bg-gray-800 rounded-lg shadow p-6">
+          <div className="flex items-center justify-between mb-4">
+            <h2 className="text-xl font-semibold text-gray-900 dark:text-white">Daily AI Suggestions</h2>
+            <button
+              onClick={loadDailySuggestions}
+              disabled={isLoadingSuggestions}
+              className="text-purple-600 hover:text-purple-700 text-sm flex items-center gap-2"
+            >
+              <RefreshCw className={`w-4 h-4 ${isLoadingSuggestions ? 'animate-spin' : ''}`} />
+              Refresh
+            </button>
+          </div>
+
+          {isLoadingSuggestions ? (
+            <div className="flex items-center justify-center py-8">
+              <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-purple-600"></div>
+            </div>
+          ) : dailySuggestions.length > 0 ? (
+            <div className="space-y-4">
+              {dailySuggestions.map((suggestion, index) => (
+                <div
+                  key={index}
+                  className="bg-gray-50 dark:bg-gray-700 rounded-lg p-4"
+                >
+                  <div className="flex justify-between items-start">
+                    <div>
+                      <h3 className="font-medium text-gray-900 dark:text-white">
+                        {suggestion.title}
+                      </h3>
+                      {suggestion.description && (
+                        <p className="text-sm text-gray-600 dark:text-gray-400 mt-1">
+                          {suggestion.description}
+                        </p>
+                      )}
+                      <div className="flex gap-2 mt-2">
+                        {suggestion.priority && (
+                          <span className="text-xs px-2 py-1 rounded-full bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200">
+                            {suggestion.priority}
+                          </span>
+                        )}
+                        {suggestion.dueDate && (
+                          <span className="text-xs px-2 py-1 rounded-full bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200">
+                            Due: {new Date(suggestion.dueDate).toLocaleDateString()}
+                          </span>
+                        )}
+                        {suggestion.frequency && (
+                          <span className="text-xs px-2 py-1 rounded-full bg-purple-100 text-purple-800 dark:bg-purple-900 dark:text-purple-200">
+                            {suggestion.frequency}
+                          </span>
+                        )}
+                      </div>
+                    </div>
+                    <button
+                      onClick={() => handleSuggestionsAccepted([suggestion])}
+                      className="px-3 py-1 text-sm bg-purple-600 text-white rounded hover:bg-purple-700"
+                    >
+                      Accept
+                    </button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <p className="text-gray-600 dark:text-gray-400 text-center py-8">
+              No suggestions available. Try refreshing or check back tomorrow.
+            </p>
+          )}
+        </div>
       </div>
 
       {/* Quick Actions */}
@@ -342,6 +682,14 @@ export default function DashboardHome() {
           </Link>
         </div>
       </div>
+
+      <SmartInputModal
+        isOpen={showAiSuggestionsModal}
+        onClose={() => setShowAiSuggestionsModal(false)}
+        context={aiContext}
+        userPrompt={userPrompt}
+        onSuggestionsAccepted={handleSuggestionsAccepted}
+      />
     </div>
   );
 }

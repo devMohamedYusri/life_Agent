@@ -113,7 +113,7 @@ interface JournalEntry {
 interface UserProfile {
   user_id: string;
   email: string;
-  full_name: string;
+  user_name: string;
   bio?: string;
   avatar_url?: string;
   created_at: string;
@@ -430,7 +430,7 @@ export default function ProfilePage() {
             <div className="mt-6 sm:mt-0 sm:flex-1 sm:min-w-0 sm:flex sm:items-center sm:justify-between">
               <div>
                 <h2 className="text-2xl font-bold text-gray-900 dark:text-white">
-                  {profile?.full_name || user?.email?.split('@')[0] || 'User'}
+                  {profile?.user_name || user?.email?.split('@')[0] || 'User'}
                 </h2>
                 <p className="text-gray-600 dark:text-gray-300 flex items-center mt-1">
                   <Mail className="w-4 h-4 mr-1" />

@@ -3,21 +3,20 @@
 
 import { useAuthStore } from "@//lib/stores/authStore"
 import { useRouter } from "next/navigation"
-import { useState, useEffect, Dispatch, SetStateAction, useCallback } from "react"
+import { useState, useEffect, Dispatch, SetStateAction, useRef } from "react"
 import { GlobalSearch } from "../GloabalSearch"
-import { notificationService, Notification } from "@//lib/database/notifications"
+import { Notification } from "@//lib/database/notifications"
 import Link from "next/link"
 import Image from "next/image"
 import { Bell, User, Settings, LogOut, Menu, Moon, Sun } from 'lucide-react'
+import Ably from 'ably';
 
 interface HeaderProps {
-    // sidebarOpen: boolean;
     setSidebarOpen: Dispatch<SetStateAction<boolean>>;
 }
 
-// export default function Header({ sidebarOpen, setSidebarOpen }: HeaderProps) {
 export default function Header({ setSidebarOpen }: HeaderProps) {
-
+    const ablyClient = useRef<Ably.Realtime | null>(null);
     const { user, signOut } = useAuthStore()
     const [showDropdown, setShowDropdown] = useState(false)
     const [showNotifications, setShowNotifications] = useState(false)
@@ -26,28 +25,113 @@ export default function Header({ setSidebarOpen }: HeaderProps) {
     const [theme, setTheme] = useState<'light' | 'dark'>('light')
     const router = useRouter()
 
-    const loadNotifications = useCallback(async () => {
-        if (!user) return;
-        try {
-            const { data } = await notificationService.getUpcoming(user.id)
-            setNotifications(data || [])
-            setUnreadCount(data?.filter(n => n.status === 'pending').length || 0)
-        } catch (error) {
-            console.error('Error loading notifications:', error)
+    // Initialize theme
+    useEffect(() => {
+        const savedTheme = localStorage.getItem('theme') as 'light' | 'dark' || 'light'
+        setTheme(savedTheme)
+        if (savedTheme === 'dark') {
+            document.documentElement.classList.add('dark')
         }
+    }, [])
+
+    // Handle Ably connection
+    useEffect(() => {
+        if (!user) {
+            // Clean up existing connection when user logs out
+            if (ablyClient.current) {
+                ablyClient.current.close();
+                ablyClient.current = null;
+            }
+            setNotifications([]);
+            setUnreadCount(0);
+            return;
+        }
+
+        const initializeAbly = async () => {
+            try {
+                // Load initial notifications
+                const res = await fetch('/api/notifications', { 
+                    headers: { 'x-user-id': user.id } 
+                });
+                
+                if (res.ok) {
+                    const json = await res.json();
+                    const initialNotifications = json.notifications || [];
+                    setNotifications(initialNotifications);
+                    setUnreadCount(initialNotifications.length);
+                }
+
+                // Initialize Ably only if not already connected
+                if (!ablyClient.current) {
+                    ablyClient.current = new Ably.Realtime({
+                        authUrl: '/api/ably-auth',
+                        authHeaders: { 'x-user-id': user.id },
+                        // Fixed options - removed invalid 'recover: null'
+                        closeOnUnload: true,
+                        autoConnect: true,
+                        echoMessages: false,
+                        disconnectedRetryTimeout: 15000, // 15 seconds
+                        suspendedRetryTimeout: 30000, // 30 seconds
+                    });
+
+                    // Handle connection state changes
+                    ablyClient.current.connection.on('connected', () => {
+                        console.log('Ably connected');
+                    });
+
+                    ablyClient.current.connection.on('disconnected', () => {
+                        console.log('Ably disconnected');
+                    });
+
+                    ablyClient.current.connection.on('failed', (error) => {
+                        console.error('Ably connection failed:', error);
+                        // Clean up on failure
+                        if (ablyClient.current) {
+                            ablyClient.current.close();
+                            ablyClient.current = null;
+                        }
+                    });
+                }
+
+                // Subscribe to notifications channel
+                const channel = ablyClient.current.channels.get(`notifications:${user.id}`);
+                
+                const handleNewNotification = (message: Ably.Message) => {
+                    const newNotification = message.data as Notification;
+                    setNotifications(prev => [newNotification, ...prev]);
+                    setUnreadCount(prev => prev + 1);
+                };
+
+                channel.subscribe('new-notification', handleNewNotification);
+
+                // Cleanup function
+                return () => {
+                    channel.unsubscribe('new-notification', handleNewNotification);
+                };
+            } catch (error) {
+                console.error('Error initializing Ably:', error);
+            }
+        };
+
+        initializeAbly();
     }, [user]);
 
+    // Clean up Ably connection on component unmount
     useEffect(() => {
-        if (user) {
-            loadNotifications()
-            // Load theme preference
-            const savedTheme = localStorage.getItem('theme') as 'light' | 'dark' || 'light'
-            setTheme(savedTheme)
-            document.documentElement.classList.toggle('dark', savedTheme === 'dark')
-        }
-    }, [user, loadNotifications])
+        return () => {
+            if (ablyClient.current) {
+                ablyClient.current.close();
+                ablyClient.current = null;
+            }
+        };
+    }, []);
 
     const handleSignOut = async () => {
+        // Close Ably connection before signing out
+        if (ablyClient.current) {
+            ablyClient.current.close();
+            ablyClient.current = null;
+        }
         await signOut()
         router.push('/auth/signin')
     }
@@ -60,8 +144,30 @@ export default function Header({ setSidebarOpen }: HeaderProps) {
     }
 
     const markNotificationAsRead = async (notificationId: string) => {
-        await notificationService.markAsRead(notificationId)
-        loadNotifications()
+        try {
+            setNotifications(prev => prev.filter(n => n.id !== notificationId));
+            setUnreadCount(prev => Math.max(0, prev - 1));
+
+            await fetch(`/api/notifications/${notificationId}/read`, {
+                method: 'POST',
+                headers: { 'x-user-id': user!.id }
+            });
+        } catch (error) {
+            console.error('Error marking notification as read:', error);
+        }
+    }
+
+    const markAllAsRead = async () => {
+        try {
+            setNotifications([]);
+            setUnreadCount(0);
+            await fetch('/api/notifications/read-all', {
+                method: 'POST',
+                headers: { 'x-user-id': user!.id }
+            });
+        } catch (error) {
+            console.error('Error marking all as read:', error);
+        }
     }
 
     return (
@@ -99,15 +205,23 @@ export default function Header({ setSidebarOpen }: HeaderProps) {
                         <Bell className="w-5 h-5" />
                         {unreadCount > 0 && (
                             <span className="absolute top-0 right-0 transform translate-x-1/2 -translate-y-1/2 bg-red-500 text-white text-xs rounded-full h-5 w-5 flex items-center justify-center">
-                                {unreadCount}
+                                {unreadCount > 9 ? '9+' : unreadCount}
                             </span>
                         )}
                     </button>
 
                     {showNotifications && (
                         <div className="absolute right-0 mt-2 w-80 bg-white dark:bg-gray-800 rounded-lg shadow-lg border dark:border-gray-700 z-50">
-                            <div className="p-4 border-b dark:border-gray-700">
+                            <div className="p-4 border-b dark:border-gray-700 flex items-center justify-between">
                                 <h3 className="font-semibold text-gray-900 dark:text-white">Notifications</h3>
+                                {notifications.length > 0 && (
+                                    <button
+                                        onClick={markAllAsRead}
+                                        className="text-xs text-purple-600 hover:text-purple-700 dark:text-purple-400 underline"
+                                    >
+                                        Mark all as read
+                                    </button>
+                                )}
                             </div>
                             <div className="max-h-96 overflow-y-auto">
                                 {notifications.length === 0 ? (
@@ -124,7 +238,9 @@ export default function Header({ setSidebarOpen }: HeaderProps) {
                                                     {notification.title}
                                                 </p>
                                                 <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
-                                                    {notification.scheduled_for ? new Date(notification.scheduled_for).toLocaleString() : new Date(notification.created_at).toLocaleString()}
+                                                    {notification.scheduled_for 
+                                                        ? new Date(notification.scheduled_for).toLocaleString() 
+                                                        : new Date(notification.created_at).toLocaleString()}
                                                 </p>
                                             </div>
                                         ))}
@@ -135,6 +251,7 @@ export default function Header({ setSidebarOpen }: HeaderProps) {
                                 <Link
                                     href="/dashboard/settings"
                                     className="text-sm text-purple-600 hover:text-purple-700 dark:text-purple-400"
+                                    onClick={() => setShowNotifications(false)}
                                 >
                                     Manage notification settings
                                 </Link>
@@ -145,7 +262,7 @@ export default function Header({ setSidebarOpen }: HeaderProps) {
 
                 {/* User menu */}
                 <div className="relative">
-                <button
+                    <button
                         onClick={() => setShowDropdown(!showDropdown)}
                         className="flex items-center space-x-2 text-gray-700 dark:text-gray-200 hover:text-gray-900 dark:hover:text-white p-2 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg"
                     >
@@ -153,22 +270,22 @@ export default function Header({ setSidebarOpen }: HeaderProps) {
                           <div className="flex-shrink-0">
                             <Image
                               className="h-8 w-8 rounded-full"
-                              src={user.avatar_url || '/default-avatar.png'}
+                              src={user?.avatar_url || '/default-avatar.png'}
                               alt="User avatar"
                               width={32}
                               height={32}
                             />
                           </div>
-                          <div className="ml-3">
+                          <div className="ml-3 hidden sm:block">
                             <p className="text-sm font-medium text-gray-700 dark:text-gray-200">
-                              {user.full_name}
+                              {user?.full_name || user?.email?.split('@')[0]}
                             </p>
                             <p className="text-xs font-medium text-gray-500 dark:text-gray-400">
-                              {user.email}
+                              {user?.email}
                             </p>
                           </div>
                         </div>
-                        <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
+                        <svg className="w-4 h-4 ml-2" fill="currentColor" viewBox="0 0 20 20">
                             <path fillRule="evenodd" d="M5.293 7.293a1 1 0 011.414 0L10 10.586l3.293-3.293a1 1 0 111.414 1.414l-4 4a1 1 0 01-1.414 0l-4-4a1 1 0 010-1.414z" clipRule="evenodd" />
                         </svg>
                     </button>
@@ -177,7 +294,7 @@ export default function Header({ setSidebarOpen }: HeaderProps) {
                         <div className="absolute right-0 mt-2 w-56 bg-white dark:bg-gray-800 rounded-lg shadow-lg border dark:border-gray-700 py-1 z-50">
                             <div className="px-4 py-3 border-b dark:border-gray-700">
                                 <p className="text-sm font-medium text-gray-900 dark:text-white">
-                                    {user?.user_metadata?.full_name || 'User'}
+                                    {user?.user_metadata?.full_name || user?.full_name || 'User'}
                                 </p>
                                 <p className="text-xs text-gray-500 dark:text-gray-400 truncate">
                                     {user?.email}

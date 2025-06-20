@@ -3,6 +3,7 @@ import { useState, useEffect, useCallback } from 'react'
 import { useAuthStore } from '../../lib/stores/authStore'
 import { goalService } from '../../lib/database/goals'
 import { categoryService } from '../../lib/database/categories'
+import { useUserTimeZone } from '../../lib/hooks/useUserTimeZone'
 
 interface Task {
   id: string
@@ -53,6 +54,7 @@ interface GoalFormData {
 
 export default function GoalsPage() {
   const { user } = useAuthStore()
+  const { formatDate } = useUserTimeZone();
   const [goals, setGoals] = useState<Goal[]>([])
   const [categories, setCategories] = useState<CategoryData[]>([])
   const [loading, setLoading] = useState(true)
@@ -217,24 +219,28 @@ export default function GoalsPage() {
           </div>
         ) : (
           filteredGoals.map((goal) => (
-            <div key={goal.goal_id} className="bg-white dark:bg-gray-800 rounded-lg shadow hover:shadow-md transition-shadow">
+            <div 
+              key={goal.goal_id} 
+              className="bg-white dark:bg-gray-800 rounded-xl shadow-lg hover:shadow-xl transition-all duration-300 transform hover:-translate-y-1 overflow-hidden border border-gray-100 dark:border-gray-700"
+            >
               <div className="p-6">
-                <div className="flex justify-between items-start mb-4">
-                  <h3 className="text-lg font-semibold text-gray-900 dark:text-white pr-2">{goal.title}</h3>
-                  <span className={`text-xs px-2 py-1 rounded-full whitespace-nowrap ${getStatusColor(goal.status)}`}>
+                <div className="flex justify-between items-start mb-5">
+                  <div className="flex-1 pr-4">
+                    <h3 className="text-xl font-bold text-gray-900 dark:text-white mb-1">{goal.title}</h3>
+                    {goal.description && (
+                      <p className="text-gray-600 dark:text-gray-400 text-sm line-clamp-2">{goal.description}</p>
+                    )}
+                  </div>
+                  <span className={`text-xs px-3 py-1.5 rounded-full font-medium whitespace-nowrap shadow-sm ${getStatusColor(goal.status)}`}>
                     {goal.status}
                   </span>
                 </div>
                 
-                {goal.description && (
-                  <p className="text-gray-600 dark:text-gray-400 text-sm mb-4">{goal.description}</p>
-                )}
-
-                <div className="space-y-2 mb-4">
+                <div className="space-y-3 mb-5">
                   {goal.category && (
                     <div className="flex items-center space-x-2">
                       <span 
-                        className="text-xs px-2 py-1 rounded-full"
+                        className="text-xs px-3 py-1.5 rounded-full font-medium shadow-sm"
                         style={{ 
                           backgroundColor: goal.category.color + '20', 
                           color: goal.category.color 
@@ -245,46 +251,54 @@ export default function GoalsPage() {
                     </div>
                   )}
                   
-                  <div className="flex items-center justify-between text-sm">
-                    <span className="text-gray-500 dark:text-gray-400">Type:</span>
-                    <span className="font-medium dark:text-gray-200">{goal.goal_type.replace('-', ' ')}</span>
+                  <div className="grid grid-cols-2 gap-3">
+                    <div className="bg-gray-50 dark:bg-gray-700/50 rounded-lg p-3 border border-gray-100 dark:border-gray-700">
+                      <div className="flex items-center justify-between text-sm">
+                        <span className="text-gray-500 dark:text-gray-400">Type:</span>
+                        <span className="font-medium dark:text-gray-200">{goal.goal_type.replace('-', ' ')}</span>
+                      </div>
+                    </div>
+                    
+                    {goal.deadline && (
+                      <div className="bg-gray-50 dark:bg-gray-700/50 rounded-lg p-3 border border-gray-100 dark:border-gray-700">
+                        <div className="flex items-center justify-between text-sm">
+                          <span className="text-gray-500 dark:text-gray-400">Deadline:</span>
+                          <span className="font-medium dark:text-gray-200">
+                            {goal.deadline ? formatDate(goal.deadline, { year: 'numeric', month: 'short', day: 'numeric' }) : 'No deadline'}
+                          </span>
+                        </div>
+                      </div>
+                    )}
                   </div>
                   
-                  {goal.deadline && (
+                  <div className="bg-gray-50 dark:bg-gray-700/50 rounded-lg p-3 border border-gray-100 dark:border-gray-700">
                     <div className="flex items-center justify-between text-sm">
-                      <span className="text-gray-500 dark:text-gray-400">Deadline:</span>
-                      <span className="font-medium dark:text-gray-200">
-                        {new Date(goal.deadline).toLocaleDateString()}
-                      </span>
+                      <span className="text-gray-500 dark:text-gray-400">Tasks:</span>
+                      <span className="font-medium dark:text-gray-200">{goal.tasks?.length || 0}</span>
                     </div>
-                  )}
-                  
-                  <div className="flex items-center justify-between text-sm">
-                    <span className="text-gray-500 dark:text-gray-400">Tasks:</span>
-                    <span className="font-medium dark:text-gray-200">{goal.tasks?.length || 0}</span>
                   </div>
                 </div>
 
                 {/* Progress Bar */}
-                <div className="mb-4">
-                  <div className="flex justify-between text-sm mb-1">
-                    <span className="text-gray-500 dark:text-gray-400">Progress</span>
-                    <span className="font-medium dark:text-gray-200">{goal.progress}%</span>
+                <div className="mb-5">
+                  <div className="flex justify-between text-sm mb-2">
+                    <span className="text-gray-500 dark:text-gray-400 font-medium">Progress</span>
+                    <span className="font-bold bg-gradient-to-r from-purple-500 to-pink-500 bg-clip-text text-transparent">{goal.progress}%</span>
                   </div>
-                  <div className="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-2">
+                  <div className="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-2.5 overflow-hidden">
                     <div 
-                      className="bg-purple-600 dark:bg-purple-500 h-2 rounded-full transition-all duration-300"
+                      className="bg-gradient-to-r from-purple-500 to-pink-500 h-2.5 rounded-full transition-all duration-500 ease-out"
                       style={{ width: `${goal.progress}%` }}
                     />
                   </div>
                 </div>
 
                 {/* Actions */}
-                <div className="flex justify-between items-center">
+                <div className="flex justify-between items-center pt-4 border-t border-gray-100 dark:border-gray-700">
                   <select
                     value={goal.status}
                     onChange={(e) => updateGoalStatus(goal.goal_id, e.target.value as GoalStatus)}
-                    className="text-sm border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded px-2 py-1 focus:outline-none focus:ring-2 focus:ring-purple-500"
+                    className="text-sm border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded-lg px-3 py-1.5 focus:outline-none focus:ring-2 focus:ring-purple-500 transition-all duration-200"
                   >
                     <option value="active">Active</option>
                     <option value="completed">Completed</option>
@@ -292,14 +306,27 @@ export default function GoalsPage() {
                     <option value="cancelled">Cancelled</option>
                   </select>
                   
-                  <button
-                    onClick={() => deleteGoal(goal.goal_id)}
-                    className="text-red-500 dark:text-red-400 hover:text-red-700 dark:hover:text-red-300 transition-colors"
-                  >
-                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                    </svg>
-                  </button>
+                  <div className="flex space-x-2">
+                    <button
+                      onClick={() => {/* Add edit functionality */}}
+                      className="text-purple-600 dark:text-purple-400 hover:text-purple-700 dark:hover:text-purple-300 transition-colors p-2 rounded-full hover:bg-purple-50 dark:hover:bg-purple-900/20"
+                      aria-label="Edit goal"
+                    >
+                      <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                      </svg>
+                    </button>
+                    
+                    <button
+                      onClick={() => deleteGoal(goal.goal_id)}
+                      className="text-red-500 dark:text-red-400 hover:text-red-700 dark:hover:text-red-300 transition-colors p-2 rounded-full hover:bg-red-50 dark:hover:bg-red-900/20"
+                      aria-label="Delete goal"
+                    >
+                      <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                      </svg>
+                    </button>
+                  </div>
                 </div>
               </div>
             </div>

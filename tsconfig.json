@@ -23,7 +23,8 @@
       "@components/*": ["./src/app/components/*"],
       "@lib/*": ["./src/app/lib/*"],
       "@hooks/*": ["./src/app/hooks/*"],
-      "@api/*":["./src/app/api"]
+      "@api/*":["./src/app/api"],
+      "@appcomponents/*": ["./src/appcomponents/*"]
     }
   },
   "include": ["next-env.d.ts", "**/*.ts", "**/*.tsx", ".next/types/**/*.ts", "src/app/lib/supabase.js", "src/app/services/ai.js"],

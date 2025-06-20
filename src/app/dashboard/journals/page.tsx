@@ -2,6 +2,7 @@
 import { useState, useEffect, useCallback } from 'react'
 import { useAuthStore } from '../../lib/stores/authStore'
 import { journalService } from '../../lib/database/journal'
+import { useUserTimeZone } from '../../lib/hooks/useUserTimeZone'
 
 interface JournalEntry {
   entry_id: string
@@ -23,6 +24,7 @@ const MOODS = [
 
 export default function JournalPage() {
   const { user } = useAuthStore()
+  const { formatDate, formatTime } = useUserTimeZone();
   const [entries, setEntries] = useState<JournalEntry[]>([])
   const [loading, setLoading] = useState(true)
   const [showCreateModal, setShowCreateModal] = useState(false)
@@ -191,26 +193,35 @@ export default function JournalPage() {
           </div>
         ) : (
           filteredEntries.map((entry) => (
-            <div key={entry.entry_id} className="bg-white dark:bg-gray-800 rounded-lg shadow hover:shadow-md transition-shadow">
+            <div 
+              key={entry.entry_id} 
+              className="bg-white dark:bg-gray-800 rounded-xl shadow-lg hover:shadow-xl transition-all duration-300 transform hover:-translate-y-1 overflow-hidden border border-gray-100 dark:border-gray-700"
+            >
               <div className="p-6">
-                <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-4 gap-2">
-                  <div className="flex items-center space-x-3">
-                    <span className="text-2xl">{getMoodEmoji(entry.mood)}</span>
+                <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-4 gap-3">
+                  <div className="flex items-center space-x-4">
+                    <div className="flex-shrink-0 w-12 h-12 rounded-full bg-gradient-to-br from-purple-100 to-pink-100 dark:from-purple-900/30 dark:to-pink-900/30 flex items-center justify-center shadow-inner">
+                      <span className="text-3xl transform hover:scale-110 transition-transform duration-200">{getMoodEmoji(entry.mood)}</span>
+                    </div>
                     <div>
-                      <h3 className="font-semibold text-gray-900 dark:text-white">
-                        {new Date(entry.entry_date).toLocaleDateString('en-US', { 
-                          weekday: 'long', 
-                          year: 'numeric', 
-                          month: 'long', 
-                          day: 'numeric' 
-                        })}
+                      <h3 className="font-semibold text-gray-900 dark:text-white text-lg">
+                        {formatDate(entry.entry_date, { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}
                       </h3>
-                      <p className="text-sm text-gray-500 dark:text-gray-400">Feeling {entry.mood}</p>
+                      <div className="flex items-center mt-1">
+                        <span className="text-sm font-medium bg-gradient-to-r from-purple-500 to-pink-500 bg-clip-text text-transparent">
+                          Feeling {entry.mood}
+                        </span>
+                        <span className="mx-2 text-gray-300 dark:text-gray-600">•</span>
+                        <span className="text-xs text-gray-500 dark:text-gray-400">
+                          {formatTime(entry.entry_date, { hour: '2-digit', minute: '2-digit' })}
+                        </span>
+                      </div>
                     </div>
                   </div>
                   <button
                     onClick={() => deleteEntry(entry.entry_id)}
-                    className="text-red-500 dark:text-red-400 hover:text-red-700 dark:hover:text-red-300 transition-colors"
+                    className="text-red-500 dark:text-red-400 hover:text-red-700 dark:hover:text-red-300 transition-colors p-2 rounded-full hover:bg-red-50 dark:hover:bg-red-900/20"
+                    aria-label="Delete journal entry"
                   >
                     <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
@@ -218,14 +229,18 @@ export default function JournalPage() {
                   </button>
                 </div>
 
-                <p className="text-gray-700 dark:text-gray-300 mb-4 whitespace-pre-wrap">{entry.content}</p>
+                <div className="mt-4 bg-gray-50 dark:bg-gray-700/50 rounded-lg p-4 border border-gray-100 dark:border-gray-700">
+                  <p className="text-gray-700 dark:text-gray-300 leading-relaxed">
+                    {entry.content}
+                  </p>
+                </div>
 
                 {entry.tags && entry.tags.length > 0 && (
-                  <div className="flex flex-wrap gap-2 mb-4">
+                  <div className="mt-4 flex flex-wrap gap-2">
                     {entry.tags.map((tag, index) => (
                       <span 
-                        key={index}
-                        className="text-xs px-2 py-1 bg-purple-100 dark:bg-purple-900 text-purple-700 dark:text-purple-300 rounded-full"
+                        key={index} 
+                        className="px-3 py-1 text-xs font-medium bg-purple-100 dark:bg-purple-900/30 text-purple-700 dark:text-purple-300 rounded-full"
                       >
                         #{tag}
                       </span>
@@ -233,11 +248,23 @@ export default function JournalPage() {
                   </div>
                 )}
 
-                {entry.notes && (
-                  <div className="mt-4 p-3 bg-gray-50 dark:bg-gray-700 rounded-md">
-                    <p className="text-sm text-gray-600 dark:text-gray-300">{entry.notes}</p>
+                <div className="mt-4 pt-4 border-t border-gray-100 dark:border-gray-700 flex justify-between items-center">
+                  <div className="flex items-center space-x-2 text-sm text-gray-500 dark:text-gray-400">
+                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                    </svg>
+                    <span>{formatDate(entry.entry_date, { month: 'short', day: 'numeric' })}</span>
                   </div>
-                )}
+                  <button 
+                    className="text-purple-600 dark:text-purple-400 hover:text-purple-700 dark:hover:text-purple-300 text-sm font-medium flex items-center"
+                    onClick={() => {/* Add edit functionality */}}
+                  >
+                    <svg className="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                    </svg>
+                    Edit
+                  </button>
+                </div>
               </div>
             </div>
           ))
