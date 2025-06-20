@@ -1,16 +1,22 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { notificationService } from '../../../lib/database/notifications';
+import { createRouteHandlerClient } from '@supabase/auth-helpers-nextjs';
+import { cookies } from 'next/headers';
 
 // Dummy user extraction for demonstration; replace with real auth
-async function getUserIdFromRequest(req: NextRequest) {
-  const userId = req.headers.get('x-user-id');
-  if (!userId) throw new Error('Unauthorized');
-  return userId;
+async function getUserIdFromRequest() {
+  const supabase = createRouteHandlerClient({ cookies });
+  const { data: { session } } = await supabase.auth.getSession();
+
+  if (!session || !session.user) {
+    throw new Error('Unauthorized');
+  }
+  return session.user.id;
 }
 
 export async function POST(req: NextRequest) {
   try {
-    const userId = await getUserIdFromRequest(req);
+    const userId = await getUserIdFromRequest();
     await notificationService.markAllAsRead(userId);
     return NextResponse.json({ success: true });
   } catch (error) {
