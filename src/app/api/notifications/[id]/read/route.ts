@@ -2,12 +2,17 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { notificationService } from '@//lib/database/notifications';
 
+type Props = {
+  params: Promise<{ id: string }>;
+};
+
 export async function POST(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  props: Props
 ): Promise<NextResponse> {
   try {
-    // Extract notification ID from params
+    // In Next.js 15, params is a Promise
+    const params = await props.params;
     const notificationId = params.id;
     
     // TODO: Add proper authentication here
