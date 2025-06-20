@@ -14,7 +14,7 @@ async function getUserIdFromRequest() {
   return session.user.id;
 }
 
-export async function POST(req: NextRequest) {
+export async function POST() {
   try {
     const userId = await getUserIdFromRequest();
     await notificationService.markAllAsRead(userId);

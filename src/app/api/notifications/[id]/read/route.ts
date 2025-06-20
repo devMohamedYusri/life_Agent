@@ -4,16 +4,16 @@ import { notificationService } from '@//lib/database/notifications';
 import { createRouteHandlerClient } from '@supabase/auth-helpers-nextjs';
 import { cookies } from 'next/headers';
 
-// Dummy user extraction for demonstration; replace with real auth
-async function getUserIdFromRequest(): Promise<string> {
-  const supabase = createRouteHandlerClient({ cookies });
-  const { data: { session } } = await supabase.auth.getSession();
+// // Dummy user extraction for demonstration; replace with real auth
+// async function getUserIdFromRequest(): Promise<string> {
+//   const supabase = createRouteHandlerClient({ cookies });
+//   const { data: { session } } = await supabase.auth.getSession();
 
-  if (!session || !session.user) {
-    throw new Error('Unauthorized');
-  }
-  return session.user.id;
-}
+//   if (!session || !session.user) {
+//     throw new Error('Unauthorized');
+//   }
+//   return session.user.id;
+// }
 
 type RouteContext = {
   params: {
