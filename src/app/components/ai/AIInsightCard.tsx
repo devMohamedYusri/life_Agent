@@ -41,7 +41,7 @@ export function AIInsightCard({ context }: AIInsightCardProps) {
 
   useEffect(() => {
     fetchInsight();
-  }, [context]);
+  }, [context,fetchInsight]);
 
   const handleFeedback = (type: 'positive' | 'negative') => {
     setFeedback(type);

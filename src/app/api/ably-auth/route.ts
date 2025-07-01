@@ -3,7 +3,7 @@ import { createClient } from '@supabase/supabase-js';
 import Ably from 'ably';
 import { cookies } from 'next/headers';
 
-export async function POST(req: NextRequest) {
+export async function POST() {
   try {
     const cookieStore = await cookies();
     const supabaseAuthToken = cookieStore.get('sb-nehzhitiemkaexhybtau-auth-token')?.value;

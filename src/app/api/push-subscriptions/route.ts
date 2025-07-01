@@ -2,7 +2,16 @@ import { NextRequest, NextResponse } from 'next/server';
 import { createRouteHandlerClient } from '@supabase/auth-helpers-nextjs';
 import { cookies } from 'next/headers';
 
-async function getUserId(req: NextRequest) {
+interface PushSubscriptionDetails {
+  endpoint: string;
+  expirationTime: number | null;
+  keys: {
+    p256dh: string;
+    auth: string;
+  };
+}
+
+async function getUserId() {
   const supabase = createRouteHandlerClient({ cookies });
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) throw new Error('Unauthorized');
@@ -11,8 +20,8 @@ async function getUserId(req: NextRequest) {
 
 export async function POST(req: NextRequest) {
   try {
-    const userId = await getUserId(req);
-    const subscription = await req.json();
+    const userId = await getUserId();
+    const subscription: PushSubscriptionDetails = await req.json();
 
     if (!subscription?.endpoint) {
       return NextResponse.json({ error: 'Invalid subscription' }, { status: 400 });
@@ -28,17 +37,17 @@ export async function POST(req: NextRequest) {
 
     if (error) throw error;
     return NextResponse.json({ success: true });
-  } catch (error: any) {
+  } catch (error: unknown) {
     return NextResponse.json(
-      { error: error.message || 'Failed to save subscription' },
+      { error: (error instanceof Error) ? error.message : 'Failed to save subscription' },
       { status: 500 }
     );
   }
 }
 
-export async function GET(req: NextRequest) {
+export async function GET() {
   try {
-    const userId = await getUserId(req);
+    const userId = await getUserId();
     const supabase = createRouteHandlerClient({ cookies });
     const { data, error } = await supabase
       .from('push_subscriptions')
@@ -48,9 +57,9 @@ export async function GET(req: NextRequest) {
 
     if (error) throw error;
     return NextResponse.json({ subscription: data?.subscription_details || null });
-  } catch (error: any) {
+  } catch (error: unknown) {
     return NextResponse.json(
-      { error: error.message || 'Failed to get subscription' },
+      { error: (error instanceof Error) ? error.message : 'Failed to get subscription' },
       { status: 500 }
     );
   }
@@ -58,7 +67,7 @@ export async function GET(req: NextRequest) {
 
 export async function DELETE(req: NextRequest) {
   try {
-    const userId = await getUserId(req);
+    const userId = await getUserId();
     const { endpoint } = await req.json();
 
     if (!endpoint) {
@@ -74,9 +83,9 @@ export async function DELETE(req: NextRequest) {
 
     if (error) throw error;
     return NextResponse.json({ success: true });
-  } catch (error: any) {
+  } catch (error: unknown) {
     return NextResponse.json(
-      { error: error.message || 'Failed to delete subscription' },
+      { error: (error instanceof Error) ? error.message : 'Failed to delete subscription' },
       { status: 500 }
     );
   }

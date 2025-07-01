@@ -390,13 +390,13 @@ export default function DashboardHome() {
               suggestionsToProcess = parsed.suggestions;
             }
           } catch (e) {
-            console.log("Content is not JSON parseable");
+            console.log("Content is not JSON parseable",e);
           }
         }
 
         if (suggestionsToProcess.length > 0) {
           const mappedSuggestions: AISuggestion[] = suggestionsToProcess.map(
-            (suggestion: any) => ({
+            (suggestion: AISuggestion) => ({
               id: generateUUID(),
               type: suggestion.type as "task" | "habit" | "goal",
               title: suggestion.title,
@@ -845,7 +845,7 @@ export default function DashboardHome() {
             </div>
           ) : (dailySuggestions.length > 0 && dailySuggestions.every(s => processedSuggestions.has(s.id))) ? (
             <p className="text-gray-600 dark:text-gray-400 text-center py-8">
-              You've reviewed all suggestions for today. Come back tomorrow for new insights!
+              You&apos;ve reviewed all suggestions for today. Come back tomorrow for new insights!
             </p>
           ) : (
             <p className="text-gray-600 dark:text-gray-400 text-center py-8">

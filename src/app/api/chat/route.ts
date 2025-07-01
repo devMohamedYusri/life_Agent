@@ -19,7 +19,7 @@ interface ChatContext {
     recentJournalEntries?: JournalEntry[];
 }
 
-async function tryModel(model: string, message: string, context: ChatContext, origin: string) {
+async function tryModel(model: string, message: string, context: ChatContext,) {
     // Prepare messages array with system message and chat history
     const messages = [
         {
@@ -165,7 +165,7 @@ export async function POST(request: Request) {
         for (const model of models) {
             try {
                 console.log(`Trying model: ${model}`);
-                const result = await tryModel(model, message, context, request.headers.get('origin') || 'http://localhost:3000');
+                const result = await tryModel(model, message, context);
 
                 if (result.error === 'RATE_LIMIT') {
                     console.log(`Rate limit reached for model ${model}, trying next model...`);

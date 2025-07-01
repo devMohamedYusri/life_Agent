@@ -11,15 +11,14 @@ export default function SigninPage() {
     const [loading, setLoading] = useState(false)
     const router = useRouter()
     const { user, initialized } = useAuthStore()
+    // Get signIn function from Zustand store
+    const signIn = useAuthStore((state)=>state.signIn)
 
     // Immediate redirect if user is logged in and auth is initialized
     if (initialized && user) {
         router.replace('/dashboard')
         return null; // Return null to prevent rendering the sign-in page content
     }
-
-    // Get signIn function from Zustand store
-    const signIn = useAuthStore((state)=>state.signIn)
 
     const handleSubmit = async (e:FormEvent) => {
         e.preventDefault()

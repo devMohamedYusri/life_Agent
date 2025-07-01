@@ -9,7 +9,7 @@ import { goalService } from '@//lib/database/goals'
 import { habitService } from '@//lib/database/habits'
 import { journalService } from '@//lib/database/journal'
 import { useRouter } from 'next/navigation'
-import { debounce } from 'lodash'
+import debounce from 'lodash.debounce'
 
 interface Task {
   task_id: string;
@@ -125,112 +125,109 @@ export function GlobalSearch() {
   }, [isOpen, results, selectedIndex, handleResultClick])
 
   // Debounced search function
-  const performSearch = useCallback(
-    debounce(async (searchQuery: string) => {
-      if (!user || searchQuery.trim().length < 2) {
-        setResults([])
-        return
-      }
-  
-      setLoading(true)
-      try {
-        const searchResults: SearchResult[] = []
-        const lowerQuery = searchQuery.toLowerCase()
-  
-        // Search tasks
-        const { data: tasks } = await taskService.getUserTasks(user.id)
-        tasks?.forEach((task: Task) => {
-          const title = task.title || ''
-          const description = task.description || ''
-          
-          if (
-            title.toLowerCase().includes(lowerQuery) ||
-            description.toLowerCase().includes(lowerQuery)
-          ) {
-            searchResults.push({
-              id: task.task_id,
-              title: title,
-              type: 'task',
-              description: description,
-              status: task.is_completed ? 'completed' : 'pending',
-              priority: task.priority,
-              date: task.due_date
-            })
-          }
-        })
-  
-        // Search goals
-        const { data: goals } = await goalService.getUserGoals(user.id)
-        goals?.forEach((goal: Goal) => {
-          const title = goal.title || ''
-          const description = goal.description || ''
-          
-          if (
-            title.toLowerCase().includes(lowerQuery) ||
-            description.toLowerCase().includes(lowerQuery)
-          ) {
-            searchResults.push({
-              id: goal.goal_id,
-              title: title,
-              type: 'goal',
-              description: description,
-              status: goal.status,
-              date: goal.deadline
-            })
-          }
-        })
-  
-        // Search habits
-        const { data: habits } = await habitService.getUserHabits(user.id)
-        habits?.forEach((habit: Habit) => {
-          const title = habit.title || habit.name || ''
-          const description = habit.description || ''
-          
-          if (
-            title.toLowerCase().includes(lowerQuery) ||
-            description.toLowerCase().includes(lowerQuery)
-          ) {
-            searchResults.push({
-              id: habit.habit_id,
-              title: title,
-              type: 'habit',
-              description: description
-            })
-          }
-        })
-  
-        // Search journal entries
-        const { data: entries } = await journalService.getUserJournalEntries(user.id)
-        entries?.forEach((entry: JournalEntry) => {
-          const content = entry.content || ''
-          
-          if (content.toLowerCase().includes(lowerQuery)) {
-            searchResults.push({
-              id: entry.entry_id,
-              title: `Journal Entry - ${new Date(entry.created_at || entry.entry_date || Date.now()).toLocaleDateString()}`,
-              type: 'journal',
-              description: content.substring(0, 100) + (content.length > 100 ? '...' : ''),
-              mood: entry.mood,
-              date: entry.created_at || entry.entry_date
-            })
-          }
-        })
-  
-        setResults(searchResults.slice(0, 10)) // Limit to 10 results
-        setSelectedIndex(0)
-      } catch (error) {
-        console.error('Search error:', error)
-        setResults([])
-      } finally {
-        setLoading(false)
-      }
-    }, 300),
-    [user]
-  )
+  const performSearch = useRef(debounce(async (searchQuery: string) => {
+    if (!user || searchQuery.trim().length < 2) {
+      setResults([])
+      return
+    }
+
+    setLoading(true)
+    try {
+      const searchResults: SearchResult[] = []
+      const lowerQuery = searchQuery.toLowerCase()
+
+      // Search tasks
+      const { data: tasks } = await taskService.getUserTasks(user.id)
+      tasks?.forEach((task: Task) => {
+        const title = task.title || ''
+        const description = task.description || ''
+        
+        if (
+          title.toLowerCase().includes(lowerQuery) ||
+          description.toLowerCase().includes(lowerQuery)
+        ) {
+          searchResults.push({
+            id: task.task_id,
+            title: title,
+            type: 'task',
+            description: description,
+            status: task.is_completed ? 'completed' : 'pending',
+            priority: task.priority,
+            date: task.due_date
+          })
+        }
+      })
+
+      // Search goals
+      const { data: goals } = await goalService.getUserGoals(user.id)
+      goals?.forEach((goal: Goal) => {
+        const title = goal.title || ''
+        const description = goal.description || ''
+        
+        if (
+          title.toLowerCase().includes(lowerQuery) ||
+          description.toLowerCase().includes(lowerQuery)
+        ) {
+          searchResults.push({
+            id: goal.goal_id,
+            title: title,
+            type: 'goal',
+            description: description,
+            status: goal.status,
+            date: goal.deadline
+          })
+        }
+      })
+
+      // Search habits
+      const { data: habits } = await habitService.getUserHabits(user.id)
+      habits?.forEach((habit: Habit) => {
+        const title = habit.title || habit.name || ''
+        const description = habit.description || ''
+        
+        if (
+          title.toLowerCase().includes(lowerQuery) ||
+          description.toLowerCase().includes(lowerQuery)
+        ) {
+          searchResults.push({
+            id: habit.habit_id,
+            title: title,
+            type: 'habit',
+            description: description
+          })
+        }
+      })
+
+      // Search journal entries
+      const { data: entries } = await journalService.getUserJournalEntries(user.id)
+      entries?.forEach((entry: JournalEntry) => {
+        const content = entry.content || ''
+        
+        if (content.toLowerCase().includes(lowerQuery)) {
+          searchResults.push({
+            id: entry.entry_id,
+            title: `Journal Entry - ${new Date(entry.created_at || entry.entry_date || Date.now()).toLocaleDateString()}`,
+            type: 'journal',
+            description: content.substring(0, 100) + (content.length > 100 ? '...' : ''),
+            mood: entry.mood,
+            date: entry.created_at || entry.entry_date
+          })
+        }
+      })
+
+      setResults(searchResults.slice(0, 10)) // Limit to 10 results
+      setSelectedIndex(0)
+    } catch (error) {
+      console.error('Search error:', error)
+      setResults([])
+    } finally {
+      setLoading(false)
+    }
+  }, 300))
 
   useEffect(() => {
     if (query.length >= 2) {
-      performSearch(query)
+      performSearch.current(query)
     } else {
       setResults([])
     }

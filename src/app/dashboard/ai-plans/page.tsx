@@ -285,7 +285,7 @@ const MessageDisplay = memo(({
           const journalEntryToInsert: Database['public']['Tables']['journal_entries']['Insert'] = {
             user_id: user.id,
             content: suggestion.Description || '',
-            mood: (['neutral', 'positive', 'negative'].includes(suggestion.Mood as any) ? suggestion.Mood : null) as string | null,
+            mood: (['neutral', 'positive', 'negative'].includes(suggestion.Mood as string) ? suggestion.Mood : null) as string | null,
             tags: suggestion.Tags || null,
             entry_date: suggestion.EntryDate ? new Date(suggestion.EntryDate).toISOString() : new Date().toISOString()
           };
@@ -301,7 +301,7 @@ const MessageDisplay = memo(({
     } finally {
       setIsProcessing(prev => ({ ...prev, [suggestion.Id]: false }))
     }
-  }, [user, isProcessing, addTask, addGoal, addHabit, addJournalEntry, onSuggestionDecision, message.id])
+  }, [user, isProcessing, addJournalEntry, onSuggestionDecision, message.id])
 
   const handleRejectSuggestion = useCallback((suggestionId: string) => {
     onSuggestionDecision(message.id, suggestionId, 'rejected')

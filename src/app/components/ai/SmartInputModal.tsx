@@ -57,7 +57,7 @@ export function SmartInputModal({
     if (isOpen && userPrompt) {
       fetchSuggestions();
     }
-  }, [isOpen, userPrompt]);
+  }, [isOpen, userPrompt,fetchSuggestions]);
 
   const handleAcceptSuggestion = (suggestion: AISuggestion) => {
     // In a real app, you'd send this to your backend to save it

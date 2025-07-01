@@ -2,16 +2,48 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { models } from '@//models'; // Import your models list
 
+interface GroqChatCompletionResponse {
+    choices: Array<{
+        message: {
+            content: string;
+        };
+    }>;
+}
+
+interface DailyMotivationRequestBody {
+    userProfile?: { user_name?: string };
+    recentAchievements?: unknown[];
+}
+
+interface MoodAnalysisEntry {
+    created_at: string;
+    mood: string;
+    content?: string;
+}
+
+interface MoodAnalysisRequestBody {
+    entries?: MoodAnalysisEntry[];
+}
+
+interface RecommendationsContext {
+    tasks?: unknown[];
+    goals?: unknown[];
+    completionRate?: number;
+}
+
+interface RecommendationsRequestBody {
+    context?: RecommendationsContext;
+}
+
 const GROQ_API_KEY = process.env.GROQ_API_KEY;
 const GROQ_API_URL = 'https://api.groq.com/openai/v1/chat/completions';
 
 // Helper function to try models sequentially until one works
 async function tryModelsSequentially(
-    messages: any[],
+    messages: Array<{ role: string; content: string }>,
     maxTokens: number = 500,
-    temperature: number = 0.7,
-    origin: string | null = 'http://localhost:3000'
-): Promise<{ success: boolean; data?: any; error?: string; modelUsed?: string }> {
+    temperature: number = 0.7
+): Promise<{ success: boolean; data?: GroqChatCompletionResponse; error?: string; modelUsed?: string }> {
     
     for (let i = 0; i < models.length; i++) {
         const model = models[i];
@@ -111,7 +143,7 @@ export async function POST(req: NextRequest) {
 }
 
 // Daily Motivation Handler
-async function handleDailyMotivation(req: NextRequest, body: any) {
+async function handleDailyMotivation(req: NextRequest, body: DailyMotivationRequestBody) {
     try {
         const { userProfile, recentAchievements } = body;
 
@@ -129,8 +161,7 @@ async function handleDailyMotivation(req: NextRequest, body: any) {
         const result = await tryModelsSequentially(
             messages,
             200,
-            0.8,
-            req.headers.get('origin')
+            0.8
         );
 
         if (result.success && result.data) {
@@ -159,7 +190,7 @@ async function handleDailyMotivation(req: NextRequest, body: any) {
 }
 
 // Mood Analysis Handler
-async function handleMoodAnalysis(req: NextRequest, body: any) {
+async function handleMoodAnalysis(req: NextRequest, body: MoodAnalysisRequestBody) {
     try {
         const { entries } = body;
 
@@ -170,7 +201,7 @@ async function handleMoodAnalysis(req: NextRequest, body: any) {
             },
             {
                 role: "user",
-                content: `Analyze these mood patterns: ${JSON.stringify(entries?.map((e: any) => ({
+                content: `Analyze these mood patterns: ${JSON.stringify(entries?.map((e:MoodAnalysisEntry) => ({
                     date: e.created_at,
                     mood: e.mood,
                     content: e.content?.substring(0, 100) || ''
@@ -181,8 +212,7 @@ async function handleMoodAnalysis(req: NextRequest, body: any) {
         const result = await tryModelsSequentially(
             messages,
             400,
-            0.7,
-            req.headers.get('origin')
+            0.7
         );
 
         if (result.success && result.data) {
@@ -211,7 +241,7 @@ async function handleMoodAnalysis(req: NextRequest, body: any) {
 }
 
 // Recommendations Handler
-async function handleRecommendations(req: NextRequest, body: any) {
+async function handleRecommendations(req: NextRequest, body: RecommendationsRequestBody) {
     try {
         const { context } = body;
         const taskCount = context?.tasks?.length || 0;
@@ -250,8 +280,7 @@ Provide 3 specific, actionable recommendations to improve productivity.`
         const result = await tryModelsSequentially(
             messages,
             500,
-            0.7,
-            req.headers.get('origin')
+            0.7
         );
 
         if (result.success && result.data) {
@@ -284,7 +313,7 @@ Provide 3 specific, actionable recommendations to improve productivity.`
                 
                 // Return fallback suggestions
                 return NextResponse.json({
-                    ...getFallbackSuggestions(context),
+                    ...getFallbackSuggestions(context || {}),
                     modelUsed: result.modelUsed + ' (parse error - using fallback)'
                 });
             }
@@ -293,7 +322,7 @@ Provide 3 specific, actionable recommendations to improve productivity.`
         // Return fallback suggestions if all models fail
         console.log('All models failed, returning fallback suggestions');
         return NextResponse.json({
-            ...getFallbackSuggestions(context),
+            ...getFallbackSuggestions(context || {}),
             modelUsed: 'fallback'
         });
 
@@ -308,7 +337,7 @@ Provide 3 specific, actionable recommendations to improve productivity.`
 }
 
 // Keep the same getFallbackSuggestions function as before
-function getFallbackSuggestions(context: any) {
+function getFallbackSuggestions(context: RecommendationsContext) {
     const completionRate = context?.completionRate || 0;
     const taskCount = context?.tasks?.length || 0;
     const goalCount = context?.goals?.length || 0;

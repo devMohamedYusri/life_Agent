@@ -53,7 +53,7 @@ export async function POST(req: NextRequest) {
       user_id: user.id,
     };
     
-    const { data: newNotification, error: createError } = await notificationService.create(notificationData);
+    const { data: newNotification } = await notificationService.create(notificationData);
     
     // Publish to Ably for real-time updates
     try {
