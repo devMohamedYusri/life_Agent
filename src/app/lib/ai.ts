@@ -40,9 +40,6 @@ interface TaskRecommendationContext {
   goals: GoalType[];
   completionRate: number;
 }
-const OPENROUTER_API_KEY = process.env.OPENROUTER_API_KEY
-const OPENROUTER_API_URL = 'https://openrouter.ai/api/v1/chat/completions'
-
 interface AISuggestion {
   type: 'task' | 'goal' | 'habit' | 'journal'
   title: string
@@ -70,9 +67,11 @@ interface AIContext {
 class AIService {
   private static instance: AIService;
   private apiUrl: string;
+  private aiServicesUrl: string;
 
   private constructor() {
     this.apiUrl = '/api/chat';
+    this.aiServicesUrl = '/api/ai-services';
   }
 
   public static getInstance(): AIService {
@@ -134,63 +133,32 @@ class AIService {
 
   async generateTaskRecommendations(context: TaskRecommendationContext) {
     try {
-      const response = await fetch(OPENROUTER_API_URL, {
+      const response = await fetch(this.aiServicesUrl, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'Authorization': `Bearer ${OPENROUTER_API_KEY}`,
-          'HTTP-Referer': window.location.origin,
-          'X-Title': 'Life Agent'
         },
-        body: JSON.stringify({
-          model: 'anthropic/claude-3-sonnet',
-          messages: [
-            {
-              role: "system",
-              content: "You are a productivity coach analyzing user's tasks and goals to provide actionable recommendations. Format your response as a JSON object with a 'suggestions' array containing objects with 'type', 'title', 'description', 'priority', and optional 'dueDate' and 'frequency' fields."
-            },
-            {
-              role: "user",
-              content: `Based on these metrics:
-                - Current tasks: ${context.tasks.length}
-                - Active goals: ${context.goals.length}
-                - Completion rate: ${context.completionRate}%
-                
-                Provide 3 specific recommendations to improve productivity. Each recommendation should be actionable and specific.`
-            }
-          ],
-          max_tokens: 500,
-          temperature: 0.7,
-        })
+        body: JSON.stringify({ 
+          serviceType: 'recommendations',
+          context 
+        }),
       });
 
       if (!response.ok) {
         const errorData = await response.json();
         console.error('AI recommendation error:', errorData);
         return {
-          content: "I apologize, but I'm having trouble generating recommendations right now.",
+          content: errorData.error || "I apologize, but I'm having trouble generating recommendations right now.",
           suggestions: []
         };
       }
 
       const data = await response.json();
-      const content = data.choices[0].message.content;
       
-      try {
-        // Try to parse the response as JSON
-        const parsedResponse = JSON.parse(content);
-        return {
-          content: "Here are some recommendations based on your current activities:",
-          suggestions: parsedResponse.suggestions || []
-        };
-      } catch (e) {
-        // If parsing fails, return the raw content
-        console.log("here is the error habbened ",e)
-        return {
-          content: content,
-          suggestions: []
-        };
-      }
+      return {
+        content: data.content,
+        suggestions: data.suggestions || []
+      };
     } catch (error) {
       console.error('AI recommendation error:', error);
       return {
@@ -202,36 +170,25 @@ class AIService {
 
   async analyzeMoodPatterns(entries: JournalEntry[]) {
     try {
-      const response = await fetch(OPENROUTER_API_URL, {
+      const response = await fetch(this.aiServicesUrl, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'Authorization': `Bearer ${OPENROUTER_API_KEY}`,
-          'HTTP-Referer': window.location.origin,
-          'X-Title': 'Life Agent'
         },
-        body: JSON.stringify({
-          model: 'anthropic/claude-3-opus',
-          messages: [
-            {
-              role: "system",
-              content: "You are a mental health assistant analyzing mood patterns from journal entries."
-            },
-            {
-              role: "user",
-              content: `Analyze these mood patterns: ${JSON.stringify(entries.map(e => ({
-                date: e.created_at,
-                mood: e.mood,
-                content: e.content.substring(0, 100)
-              })))} and provide insights about emotional well-being trends.`
-            }
-          ],
-          max_tokens: 400,
-        })
+        body: JSON.stringify({ 
+          serviceType: 'mood-analysis',
+          entries 
+        }),
       });
 
+      if (!response.ok) {
+        const errorData = await response.json();
+        console.error('Mood analysis error:', errorData);
+        return errorData.error || null;
+      }
+
       const data = await response.json();
-      return data.choices[0].message.content;
+      return data.content;
     } catch (error) {
       console.error('Mood analysis error:', error);
       return null;
@@ -240,35 +197,28 @@ class AIService {
 
   async generateDailyMotivation(userProfile: UserProfile, recentAchievements: Achievement[]) {
     try {
-      const response = await fetch(OPENROUTER_API_URL, {
+      const response = await fetch(this.aiServicesUrl, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'Authorization': `Bearer ${OPENROUTER_API_KEY}`,
-          'HTTP-Referer': window.location.origin,
-          'X-Title': 'Life Agent'
         },
-        body: JSON.stringify({
-          model: 'anthropic/claude-3-opus',
-          messages: [
-            {
-              role: "system",
-              content: "You are a motivational coach providing personalized daily inspiration."
-            },
-            {
-              role: "user",
-              content: `Create a personalized motivational message for ${userProfile.user_name || 'this user'} 
-                considering their recent achievements: ${recentAchievements.map(a => a.title).join(', ')}`
-            }
-          ],
-          max_tokens: 150,
-        })
+        body: JSON.stringify({ 
+          serviceType: 'daily-motivation',
+          userProfile, 
+          recentAchievements 
+        }),
       });
 
+      if (!response.ok) {
+        const errorData = await response.json();
+        console.error('Daily motivation error:', errorData);
+        return errorData.error || null;
+      }
+
       const data = await response.json();
-      return data.choices[0].message.content;
+      return data.content;
     } catch (error) {
-      console.error('Motivation generation error:', error);
+      console.error('Daily motivation error:', error);
       return null;
     }
   }

@@ -1,10 +1,10 @@
 export interface AISuggestion {
   id: string;
-  type: 'task' | 'habit' | 'goal';
+  type: 'task' | 'habit' | 'goal' | 'journal';
   title: string;
-  description: string;
-  priority: 'high' | 'medium' | 'low';
-  reason: string;
+  description?: string;
+  priority?: 'high' | 'medium' | 'low' | 'urgent';
+  reason?: string;
   // Optional fields for tasks
   dueDate?: string; // For tasks (ISO string format expected)
   completed?: boolean; // For tasks
@@ -15,10 +15,20 @@ export interface AISuggestion {
   targetCount?: number; // For habits
 
   // Optional fields for goals
-  targetDate?: string; // For goals (ISO string format expected)
+  targetDate?: string; // For goals (ISO string format expected), replaces deadline
   progress?: number; // For goals
-  goalType?: string; // For goals (e.g., "long-term", "short-term")
+  goalType?: string; // For goals (e.g., "long-term", "short-term"), replaces goal_type
   status?: 'pending' | 'in-progress' | 'completed' | 'archived'; // For goals and tasks
+
+  // Optional fields for journal entries
+  entry_date?: string; // For journal entries
+  mood?: string; // For journal entries
+  tags?: string[]; // For journal entries
+
+  // Fields for UI state
+  decisionStatus?: 'pending' | 'accepted' | 'rejected';
+  isAccepted?: boolean;
+  isRefused?: boolean;
 
   // For complex goals/plans, nested suggestions
   subSuggestions?: AISuggestion[];

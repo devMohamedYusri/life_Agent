@@ -155,7 +155,16 @@ export const notificationService = {
     if (error) throw error
     return { error: null }
   },
-
+// Add this method to your notificationService object
+async getById(notificationId: string) {
+  const { data, error } = await client
+    .from('notifications')
+    .select('*')
+    .eq('id', notificationId)
+    .single();
+  
+  return { data, error };
+},
   // Delete notification
   async delete(notificationId: string) {
     const { error } = await client

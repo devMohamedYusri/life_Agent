@@ -1,26 +1,37 @@
-import {  NextResponse } from 'next/server';
-import { notificationService } from '../../../lib/database/notifications';
+import { NextResponse } from 'next/server';
+import { notificationService } from '@//lib/database/notifications';
 import { createRouteHandlerClient } from '@supabase/auth-helpers-nextjs';
 import { cookies } from 'next/headers';
 
-// Dummy user extraction for demonstration; replace with real auth
-async function getUserIdFromRequest() {
-  const supabase = createRouteHandlerClient({ cookies });
-  const { data: { session } } = await supabase.auth.getSession();
-
-  if (!session || !session.user) {
-    throw new Error('Unauthorized');
-  }
-  return session.user.id;
-}
-
 export async function POST() {
   try {
-    const userId = await getUserIdFromRequest();
-    await notificationService.markAllAsRead(userId);
+    const supabase = createRouteHandlerClient({ cookies });
+    const { data: { session } } = await supabase.auth.getSession();
+
+    if (!session || !session.user) {
+      return NextResponse.json(
+        { error: 'Unauthorized' },
+        { status: 401 }
+      );
+    }
+    
+    const userId = session.user.id;
+    const { error } = await notificationService.markAllAsRead(userId);
+    
+    if (error) {
+      return NextResponse.json(
+        { error: 'Failed to mark all notifications as read' },
+        { status: 400 }
+      );
+    }
+    
     return NextResponse.json({ success: true });
   } catch (error) {
-    const err=error as Error
-    return NextResponse.json({ error: err.message }, { status: 400 });
+    console.error('Error in mark all as read:', error);
+    const err = error as Error;
+    return NextResponse.json(
+      { error: err.message || 'Internal server error' },
+      { status: 500 }
+    );
   }
-} 
+}

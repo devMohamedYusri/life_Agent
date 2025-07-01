@@ -1,13 +1,15 @@
+//app/lib/ai-agent.ts
 import { AIContext, AISuggestion, AIInsight } from '../types/ai-agent';
-import { freeModels} from '../models'
-// Use OpenRouter API key
-const OPENROUTER_API_KEY = process.env.OPENROUTER_API_KEY;
+import { models } from '../models';
 
-if (!OPENROUTER_API_KEY) {
-  throw new Error('OPENROUTER_API_KEY is not set in environment variables');
+// Use Groq API key
+const GROQ_API_KEY = process.env.GROQ_API_KEY;
+
+if (!GROQ_API_KEY) {
+  throw new Error('GROQ_API_KEY is not set in environment variables');
 }
 
-const MODELS = freeModels;
+const MODELS = models;
 
 // Helper function to generate UUID
 function generateUUID(): string {
@@ -38,13 +40,11 @@ export class AIAgent {
       try {
         console.log(`Trying model: ${model}`);
         
-        const response = await fetch('https://openrouter.ai/api/v1/chat/completions', {
+        const response = await fetch('https://api.groq.com/openai/v1/chat/completions', {
           method: 'POST',
           headers: {
-            'Authorization': `Bearer ${OPENROUTER_API_KEY}`,
+            'Authorization': `Bearer ${GROQ_API_KEY}`,
             'Content-Type': 'application/json',
-            'HTTP-Referer': 'https://demo.openrouter.ai', // Change for production!
-            'X-Title': 'Life Agent',
           },
           body: JSON.stringify({
             model: model, // Use the current model from the array
@@ -70,19 +70,13 @@ export class AIAgent {
           }
           
           // Handle specific error types
-          if (response.status === 402) {
-            console.warn(`Payment required for model ${model}, trying next model...`);
-            lastError = new Error(`Payment required for model ${model}`);
-            continue; // Try next model
-          }
-          
           if (response.status === 429) {
             console.warn(`Rate limit exceeded for model ${model}, trying next model...`);
             lastError = new Error(`Rate limit exceeded for model ${model}`);
             continue; // Try next model
           }
           
-          throw new Error(`OpenRouter API error with model ${model}: ${message}`);
+          throw new Error(`Groq API error with model ${model}: ${message}`);
         }
     
         const data = await response.json();

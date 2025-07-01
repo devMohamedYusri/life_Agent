@@ -88,16 +88,28 @@ export default function HabitsPage() {
       setHabits(habitsData || []);
       setCategories(categoriesData || []);
 
-      // Get today's date range
-      const today = new Date();
-      today.setHours(0, 0, 0, 0);
-      const tomorrow = new Date(today);
-      tomorrow.setDate(tomorrow.getDate() + 1);
+      // Get today's date range, considering 12 PM as the reset time
+      const now = new Date();
+      const today12PM = new Date(now);
+      today12PM.setHours(12, 0, 0, 0);
+
+      let startOfPeriod: Date;
+      if (now.getTime() < today12PM.getTime()) {
+        // If current time is before 12 PM, the "day" started yesterday at 12 PM
+        startOfPeriod = new Date(today12PM);
+        startOfPeriod.setDate(today12PM.getDate() - 1);
+      } else {
+        // If current time is 12 PM or after, the "day" started today at 12 PM
+        startOfPeriod = today12PM;
+      }
+
+      const endOfPeriod = new Date(startOfPeriod);
+      endOfPeriod.setDate(startOfPeriod.getDate() + 1);
 
       const { data: completionsData } = await habitService.getHabitCompletions(
         user.id,
-        today.toISOString(),
-        tomorrow.toISOString()
+        startOfPeriod.toISOString(),
+        endOfPeriod.toISOString()
       );
 
       const completedHabits = completionsData?.map(c => c.habit_id) || [];
@@ -127,15 +139,27 @@ export default function HabitsPage() {
       const isCompleted = completions[habitId];
       if (isCompleted) {
         // Get today's completions to find the completion to delete
-        const today = new Date();
-        today.setHours(0, 0, 0, 0);
-        const tomorrow = new Date(today);
-        tomorrow.setDate(tomorrow.getDate() + 1);
+        const now = new Date();
+        const today12PM = new Date(now);
+        today12PM.setHours(12, 0, 0, 0);
+
+        let startOfPeriod: Date;
+        if (now.getTime() < today12PM.getTime()) {
+          // If current time is before 12 PM, the "day" started yesterday at 12 PM
+          startOfPeriod = new Date(today12PM);
+          startOfPeriod.setDate(today12PM.getDate() - 1);
+        } else {
+          // If current time is 12 PM or after, the "day" started today at 12 PM
+          startOfPeriod = today12PM;
+        }
+
+        const endOfPeriod = new Date(startOfPeriod);
+        endOfPeriod.setDate(startOfPeriod.getDate() + 1);
 
         const { data: todayCompletions } = await habitService.getHabitCompletions(
           user.id,
-          today.toISOString(),
-          tomorrow.toISOString()
+          startOfPeriod.toISOString(),
+          endOfPeriod.toISOString()
         );
 
         const completion = todayCompletions?.find(c => c.habit_id === habitId);

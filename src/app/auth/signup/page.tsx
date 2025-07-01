@@ -3,7 +3,7 @@ import { useState } from "react"
 import Link from 'next/link'
 import { useAuthStore } from "../../lib/stores/authStore"
 import { FormEvent } from 'react';
-
+import {useRouter} from "next/navigation";
 export default function SignupPage() {
     const [name, setName] = useState('')
     const [email, setEmail] = useState('')
@@ -11,7 +11,9 @@ export default function SignupPage() {
     const [error, setError] = useState('')
     const [loading, setLoading] = useState(false)
     const [success, setSuccess] = useState(false)
-
+    const { user, initialized } = useAuthStore()
+    const router=useRouter();
+    if (initialized && user) router.push('/dashboard')
     // Get signup function from Zustand store
     const signUp = useAuthStore((state)=>state.signUp)
 

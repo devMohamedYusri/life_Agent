@@ -53,8 +53,8 @@ export interface JournalEntry {
   id: string;
   entry_date: string;
   content: string;
-  mood?: string;
-  tags?: string[];
+  mood?: string | null;
+  tags?: string[] | null;
 }
 
 // interface Category {

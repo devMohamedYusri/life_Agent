@@ -1,6 +1,7 @@
-// src/app/api/notifications/[id]/read/route.ts
 import { NextRequest, NextResponse } from 'next/server';
 import { notificationService } from '@//lib/database/notifications';
+import { createRouteHandlerClient } from '@supabase/auth-helpers-nextjs';
+import { cookies } from 'next/headers';
 
 type Props = {
   params: Promise<{ id: string }>;
@@ -11,19 +12,30 @@ export async function POST(
   props: Props
 ): Promise<NextResponse> {
   try {
+    // Get authenticated user
+    const supabase = createRouteHandlerClient({ cookies });
+    const { data: { session } } = await supabase.auth.getSession();
+    
+    if (!session || !session.user) {
+      return NextResponse.json(
+        { error: 'Unauthorized' },
+        { status: 401 }
+      );
+    }
+    
     // In Next.js 15, params is a Promise
     const params = await props.params;
     const notificationId = params.id;
     
-    // TODO: Add proper authentication here
-    // For now, you can get user ID from headers (if you're passing it)
-    // const userId = request.headers.get('x-user-id');
-    // if (!userId) {
-    //   return NextResponse.json(
-    //     { error: 'Unauthorized' },
-    //     { status: 401 }
-    //   );
-    // }
+    // Verify the notification belongs to the user before marking as read
+    const { data: notification } = await notificationService.getById(notificationId);
+    
+    if (!notification || !notification[0] || notification[0].user_id !== session.user.id) {
+      return NextResponse.json(
+        { error: 'Notification not found' },
+        { status: 404 }
+      );
+    }
     
     // Mark notification as read
     const { data, error } = await notificationService.markAsRead(notificationId);
@@ -41,6 +53,7 @@ export async function POST(
     });
     
   } catch (error) {
+    console.error('Error in mark as read:', error);
     const err = error as Error;
     
     return NextResponse.json(

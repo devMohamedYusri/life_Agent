@@ -1,6 +1,6 @@
 import { useCallback } from 'react';
 import { useSupabase } from './useSupabase';
-import { Task, Goal, Habit, JournalEntry } from '../../types/ai-agent';
+import { Task, Goal, Habit, JournalEntry } from '../../lib/export';
 
 export const useAIAgent = () => {
   const { supabase } = useSupabase();

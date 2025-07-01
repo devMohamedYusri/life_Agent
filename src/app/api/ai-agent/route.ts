@@ -1,3 +1,4 @@
+//app/api/ai-agent/route.ts
 import { NextResponse } from 'next/server';
 import { AIAgent } from '../../lib/ai-agent';
 import { AIContext } from '../../types/ai-agent';
@@ -35,11 +36,11 @@ export async function POST(request: Request) {
       );
     }
 
-    if (!process.env.OPENROUTER_API_KEY) {
+    if (!process.env.GROQ_API_KEY) {
       return NextResponse.json(
         { 
           error: 'Configuration error',
-          details: 'OpenRouter API key is not configured in environment variables'
+          details: 'Groq API key is not configured in environment variables'
         },
         { 
           status: 500,
@@ -100,9 +101,9 @@ export async function POST(request: Request) {
   } catch (error) {
     console.error('AI Agent API Error:', error);
     
-    // Log OpenRouter-specific errors
+    // Log Groq-specific errors
     if (typeof error === 'object' && error !== null && 'response' in error) {
-      console.error('OpenRouter API response:', (error as { response: unknown }).response);
+      console.error('Groq API response:', (error as { response: unknown }).response);
     }
     
     let errorMessage = 'An unexpected error occurred';
@@ -112,12 +113,12 @@ export async function POST(request: Request) {
     if (error instanceof Error) {
       errorMessage = error.message;
       errorStack = process.env.NODE_ENV === 'development' ? error.stack : undefined;
-      isKnownError = error.message.includes('OpenRouter API error');
+      isKnownError = error.message.includes('Groq API error');
     }
     
     return NextResponse.json(
       { 
-        error: isKnownError ? 'OpenRouter API error' : 'Internal server error',
+        error: isKnownError ? 'Groq API error' : 'Internal server error',
         message: errorMessage,
         details: errorStack
       },

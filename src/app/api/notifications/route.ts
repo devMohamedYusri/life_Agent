@@ -1,99 +1,109 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { notificationService } from '../../lib/database/notifications';
-import ably from '../../lib/ably';
+import { notificationService } from '@//lib/database/notifications';
+import ably from '@//lib/ably';
 import { createRouteHandlerClient } from '@supabase/auth-helpers-nextjs';
 import { cookies } from 'next/headers';
-import { sendPushNotification } from '../../lib/web-push';
+import { sendPushNotification } from '@//lib/web-push';
 
-// Dummy user extraction for demonstration; replace with real auth
-async function getUserFromRequest() {
+async function getAuthenticatedUser() {
   const supabase = createRouteHandlerClient({ cookies });
   const { data: { session } } = await supabase.auth.getSession();
-
-  if (!session || !session.user) {
-    throw new Error('Unauthorized');
-  }
-  return { id: session.user.id };
+  if (!session?.user) throw new Error('Unauthorized');
+  return session.user;
 }
 
 export async function GET() {
   try {
-    const user = await getUserFromRequest();
-    const { data } = await notificationService.getUnread(user.id);
-    return NextResponse.json({ notifications: data });
+    const user = await getAuthenticatedUser();
+    const { data, error } = await notificationService.getUnread(user.id);
+    
+    if (error) {
+      return NextResponse.json(
+        { error: 'Failed to fetch notifications' },
+        { status: 400 }
+      );
+    }
+    
+    return NextResponse.json({ notifications: data || [] });
   } catch (error) {
+    console.error('Error fetching notifications:', error);
     const err = error as Error;
-    return NextResponse.json({ error: err.message }, { status: 401 });
+    return NextResponse.json(
+      { error: err.message || 'Internal server error' },
+      { status: err.message === 'Unauthorized' ? 401 : 500 }
+    );
   }
 }
 
 export async function POST(req: NextRequest) {
   try {
-    const user = await getUserFromRequest();
+    const user = await getAuthenticatedUser();
     const body = await req.json();
+    
+    // Validate required fields
+    if (!body.title) {
+      return NextResponse.json(
+        { error: 'Title is required' },
+        { status: 400 }
+      );
+    }
+
     const notificationData = {
       ...body,
       user_id: user.id,
     };
-    const { data: newNotification } = await notificationService.create(notificationData);
-
-    if (newNotification) {
-      // 1. Publish to Ably for real-time in-app updates
+    
+    const { data: newNotification, error: createError } = await notificationService.create(notificationData);
+    
+    // Publish to Ably for real-time updates
+    try {
       const channel = ably.channels.get(`notifications:${user.id}`);
       await channel.publish('new-notification', newNotification);
+    } catch (ablyError) {
+      console.error('Ably publish error:', ablyError);
+    }
 
-      // 2. Send a web push notification
-      // const cookieStore = cookies();
+    // Send web push notification if subscriptions exist
+    try {
       const supabase = createRouteHandlerClient({ cookies });
-      const { data: subscriptions } = await supabase
+      const { data: subscriptions, error: subError } = await supabase
         .from('push_subscriptions')
         .select('subscription_details')
         .eq('user_id', user.id);
       
-      if (subscriptions) {
+      if (subError) {
+        console.error('Error fetching subscriptions:', subError);
+      } else if (subscriptions && subscriptions.length > 0) {
         const pushPayload = {
           title: newNotification.title,
-          body: newNotification.message,
+          body: newNotification.message || '',
           icon: '/icon-192x192.png',
           data: {
-            url: `/dashboard` // URL to open on click
+            url: `/dashboard`,
+            notificationId: newNotification.id
           }
         };
 
-        for (const sub of subscriptions) {
-          await sendPushNotification(sub.subscription_details, pushPayload);
-        }
+        // Send push notifications in parallel
+        await Promise.all(
+          subscriptions.map(sub => 
+            sendPushNotification(sub.subscription_details, pushPayload).catch(err => 
+              console.error('Push notification failed:', err)
+            )
+          )
+        );
       }
+    } catch (pushError) {
+      console.error('Push notification error:', pushError);
     }
 
     return NextResponse.json({ notification: newNotification });
   } catch (error) {
+    console.error('Error creating notification:', error);
     const err = error as Error;
-    return NextResponse.json({ error: err.message }, { status: 400 });
+    return NextResponse.json(
+      { error: err.message || 'Internal server error' },
+      { status: err.message === 'Unauthorized' ? 401 : 500 }
+    );
   }
 }
-
-// Mark as read (single notification)
-export async function PUT(req: NextRequest) {
-  try {
-    // const user = await getUserFromRequest();
-    const { notificationId } = await req.json();
-    const { data } = await notificationService.markAsRead(notificationId);
-    return NextResponse.json({ notification: data });
-  } catch (error) {
-    const err = error as Error;
-    return NextResponse.json({ error: err.message }, { status: 400 });
-  }
-}
-
-// Mark all as read
-export async function PATCH() {
-  try {
-    const user = await getUserFromRequest();
-    await notificationService.markAllAsRead(user.id);
-    return NextResponse.json({ success: true });
-  } catch (error) {
-    const err = error as Error;
-    return NextResponse.json({ error: err.message }, { status: 400 });
-  }
-} 

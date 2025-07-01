@@ -1,7 +1,7 @@
 // app/dashboard/ai-plans/page.tsx
 'use client'
 
-import { useState, useEffect, useRef, memo } from 'react'
+import { useState, useEffect, useRef, memo, useCallback } from 'react'
 import { useAuthStore } from '../../lib/stores/authStore'
 import { taskService } from '../../lib/database/tasks'
 import { goalService } from '../../lib/database/goals'
@@ -14,12 +14,46 @@ import {
   MessageSquare,
   Loader2,
   MoreVertical,
-  Edit
+  Edit,
+  CheckCircle,
+  XCircle,
+  Calendar,
+  Clock,
+  Target,
+  Tag,
+  Clipboard,
+  Flag,
+  TrendingUp,
+  Book
 } from 'lucide-react'
 import { v4 as uuidv4 } from 'uuid'
 import { useAIAgent } from '../../lib/hooks/useAIAgent'
 import { toast } from 'react-hot-toast'
 import { Popover, PopoverContent, PopoverTrigger } from '../../components/ui/popover'
+import { Database } from '../../types/supabase'
+
+interface Suggestion {
+  Id: string
+  Type: 'task' | 'goal' | 'habit' | 'journal'
+  Title: string
+  Description?: string
+  Priority?: 'low' | 'medium' | 'high' | 'urgent'
+  DueDate?: string
+  Frequency?: 'daily' | 'weekly' | 'monthly'
+  TargetCount?: number
+  Status?: string
+  Progress?: number
+  Deadline?: string
+  ReminderTime?: string
+  Streak?: number
+  EntryDate?: string
+  Mood?: string
+  Tags?: string[]
+  Category?: string
+  Goal?: string
+  GoalType?: string
+  Decision?: 'accepted' | 'rejected' | null
+}
 
 interface Message {
   id: string
@@ -29,16 +63,6 @@ interface Message {
   suggestions?: Suggestion[]
   isLoading?: boolean
   animate?: boolean
-}
-
-interface Suggestion {
-  type: 'task' | 'goal' | 'habit' | 'journal'
-  title: string
-  description?: string
-  priority?: 'low' | 'medium' | 'high' | 'urgent'
-  dueDate?: string
-  frequency?: 'daily' | 'weekly' | 'monthly'
-  targetCount?: number
 }
 
 interface Chat {
@@ -58,232 +82,433 @@ interface User {
 }
 
 interface MessageDisplayProps {
-  message: Message;
-  addTask: ReturnType<typeof useAIAgent>['addTask'];
-  addGoal: ReturnType<typeof useAIAgent>['addGoal'];
-  addHabit: ReturnType<typeof useAIAgent>['addHabit'];
-  addJournalEntry: ReturnType<typeof useAIAgent>['addJournalEntry'];
-  user: User;
-  toast: typeof toast;
-  onRejectSuggestion?: (messageId: string, suggestionIndex: number) => void;
+  message: Message
+  addTask: ReturnType<typeof useAIAgent>['addTask']
+  addGoal: ReturnType<typeof useAIAgent>['addGoal']
+  addHabit: ReturnType<typeof useAIAgent>['addHabit']
+  addJournalEntry: ReturnType<typeof useAIAgent>['addJournalEntry']
+  user: User
+  onSuggestionDecision: (messageId: string, suggestionId: string, decision: 'accepted' | 'rejected') => void
 }
 
-// Memoized MessageDisplay component to prevent unnecessary re-renders
-const MessageDisplay = memo(({ message, addJournalEntry, user, toast, onRejectSuggestion }: MessageDisplayProps) => {
-  const [isProcessing, setIsProcessing] = useState(false);
-  const [animatedIn, setAnimatedIn] = useState(!message.animate); 
-  const [displayedContent, setDisplayedContent] = useState(''); // New state for word-by-word display
+// Helper function to parse message content
+const parseMessageContent = (content: string) => {
+  if (!content) return null;
+  
+  const lines = content.split('\n')
+  return lines.map((line, index) => {
+    // Add guard clause to handle undefined lines
+    if (typeof line !== 'string') return null;
+    
+    // Headers
+    if (line.startsWith('## ')) {
+      return <h2 key={index} className="text-xl font-bold mt-4 mb-2">{line.slice(3)}</h2>
+    }
+    if (line.startsWith('### ')) {
+      return <h3 key={index} className="text-lg font-semibold mt-3 mb-1">{line.slice(4)}</h3>
+    }
+    
+    // Lists
+    if (line.startsWith('* ') || line.startsWith('- ')) {
+      return <li key={index} className="ml-4 list-disc">{line.slice(2)}</li>
+    }
+    
+    // Bold text
+    if (line.includes('**')) {
+      const parts = line.split(/\*\*(.*?)\*\*/g)
+      return (
+        <p key={index}>
+          {parts.map((part, i) => 
+            i % 2 === 1 ? <strong key={i}>{part}</strong> : part
+          )}
+        </p>
+      )
+    }
+    
+    // Italic text
+    if (line.includes('*') && !line.includes('**')) {
+      const parts = line.split(/\*(.*?)\*/g)
+      return (
+        <p key={index}>
+          {parts.map((part, i) => 
+            i % 2 === 1 ? <em key={i}>{part}</em> : part
+          )}
+        </p>
+      )
+    }
+    
+    // Regular paragraph
+    return line.trim() ? <p key={index} className="mb-2">{line}</p> : <br key={index} />
+  })
+}
+
+const taskStatuses = ['pending', 'in_progress', 'completed', 'cancelled'] as const;
+type TaskStatusType = typeof taskStatuses[number];
+
+const goalTypes = ['short-term', 'long-term'] as const;
+type GoalTypeType = typeof goalTypes[number];
+
+const goalStatuses = ['active', 'completed', 'paused', 'cancelled'] as const;
+type GoalStatusType = typeof goalStatuses[number];
+
+// Helper function to get priority color classes
+const getPriorityColor = (priority: string = 'medium') => {
+  switch (priority.toLowerCase()) {
+    case 'urgent':
+      return 'from-red-500 to-red-700'
+    case 'high':
+      return 'from-orange-500 to-orange-600'
+    case 'medium':
+      return 'from-yellow-500 to-yellow-600'
+    case 'low':
+      return 'from-green-500 to-green-600'
+    default:
+      return 'from-purple-500 to-pink-500'
+  }
+}
+
+// Helper function to get icon for suggestion type
+const getIconForSuggestionType = (type: string) => {
+  switch (type) {
+    case 'task':
+      return <Clipboard className="w-6 h-6 text-purple-400" />
+    case 'goal':
+      return <Flag className="w-6 h-6 text-pink-400" />
+    case 'habit':
+      return <TrendingUp className="w-6 h-6 text-cyan-400" />
+    case 'journal':
+      return <Book className="w-6 h-6 text-yellow-400" />
+    default:
+      return <Clipboard className="w-6 h-6 text-purple-400" />
+  }
+}
+
+// Memoized MessageDisplay component
+const MessageDisplay = memo(({ 
+  message, 
+  addTask, 
+  addGoal, 
+  addHabit, 
+  addJournalEntry, 
+  user, 
+  onSuggestionDecision
+}: MessageDisplayProps) => {
+  const [isProcessing, setIsProcessing] = useState<{[key: string]: boolean}>({})
+  const [displayedContent, setDisplayedContent] = useState('')
+  const [isAnimating, setIsAnimating] = useState(false)
 
   useEffect(() => {
-    if (message.animate) {
-      setDisplayedContent(''); // Reset content for animation
-      let i = 0;
-      const words = message.content.split(' ');
-      const typingInterval = setInterval(() => {
-        if (i < words.length) {
-          setDisplayedContent(prev => prev + words[i] + ' ');
-          i++;
-        } else {
-          clearInterval(typingInterval);
-          setAnimatedIn(true); // Mark as animated in when done typing
-        }
-      }, 70); // Adjust typing speed here (milliseconds per word)
+    if (!message.content) {
+      setDisplayedContent('')
+      return
+    }
 
-      const fadeTimer = setTimeout(() => {
-        setAnimatedIn(true);
-      }, 50); // Initial fade-in for the container
+    // For user messages or non-animated messages, show immediately
+    if (message.role === 'user' || !message.animate) {
+      setDisplayedContent(message.content)
+      return
+    }
+
+    // For animated assistant messages
+    if (message.animate && message.role === 'assistant') {
+      setIsAnimating(true)
+      setDisplayedContent('')
+      
+      const words = message.content.split(' ')
+      let currentIndex = 0
+      
+      const interval = setInterval(() => {
+        if (currentIndex < words.length) {
+          setDisplayedContent(prev => {
+            const newWord = words[currentIndex]
+            return prev ? `${prev} ${newWord}` : newWord
+          })
+          currentIndex++
+        } else {
+          clearInterval(interval)
+          setIsAnimating(false)
+        }
+      }, 50)
 
       return () => {
-        clearInterval(typingInterval);
-        clearTimeout(fadeTimer);
-      };
-    } else {
-      setDisplayedContent(message.content || ''); // Display full content instantly for non-animated messages
-      setAnimatedIn(true); // Ensure non-animated messages are immediately fully visible
+        clearInterval(interval)
+      }
     }
-  }, [message.animate, message.content]);
+  }, [message.content, message.animate, message.role])
 
-  const handleAcceptSuggestion = async (suggestion: Suggestion) => {
-    if (!user) return;
-    setIsProcessing(true);
+  const handleAcceptSuggestion = useCallback(async (suggestion: Suggestion) => {
+    if (!user || isProcessing[suggestion.Id]) return
+    
+    setIsProcessing(prev => ({ ...prev, [suggestion.Id]: true }))
+    
     try {
-      switch (suggestion.type) {
+      switch (suggestion.Type) {
         case 'task':
           await taskService.createTask({
             user_id: user.id,
-            title: suggestion.title,
-            description: suggestion.description,
-            priority: suggestion.priority || 'medium',
-            due_date: suggestion.dueDate ? new Date(suggestion.dueDate).toISOString() : null,
-            status: 'pending'
+            title: suggestion.Title,
+            description: suggestion.Description,
+            priority: suggestion.Priority || 'medium',
+            due_date: suggestion.DueDate ? new Date(suggestion.DueDate).toISOString() : null,
+            status: (taskStatuses.includes(suggestion.Status as TaskStatusType) 
+                      ? suggestion.Status : 'pending') as TaskStatusType
           })
-          break;
+          break
         case 'goal':
+          const goalType = (goalTypes.includes(suggestion.GoalType as GoalTypeType) 
+                            ? suggestion.GoalType : 'short-term') as GoalTypeType;
+          const goalStatus = (goalStatuses.includes(suggestion.Status as GoalStatusType) 
+                              ? suggestion.Status : 'active') as GoalStatusType;
+
           await goalService.createGoal({
             user_id: user.id,
-            title: suggestion.title,
-            description: suggestion.description || '',
-            priority: suggestion.priority || 'medium',
-            goal_type: 'short-term',
-            status: 'active'
-          });
-          break;
+            title: suggestion.Title,
+            description: suggestion.Description || '',
+            priority: suggestion.Priority || 'medium',
+            goal_type: goalType,
+            status: goalStatus,
+            deadline: suggestion.Deadline ? new Date(suggestion.Deadline).toISOString() : null,
+            progress: suggestion.Progress || 0
+          })
+          break
         case 'habit':
           await habitService.createHabit({
             user_id: user.id,
-            title: suggestion.title,
-            description: suggestion.description || '',
-            frequency: suggestion.frequency || 'daily',
-            target_count: suggestion.targetCount || 1
-          });
-          break;
+            title: suggestion.Title,
+            description: suggestion.Description || '',
+            frequency: suggestion.Frequency || 'daily',
+            target_count: suggestion.TargetCount || 1,
+            reminder_time: suggestion.ReminderTime || null
+          })
+          break
         case 'journal':
-          await addJournalEntry({
-            content: suggestion.description || '',
-            mood: 'neutral',
-            tags: []
-          });
-          break;
+          const journalEntryToInsert: Database['public']['Tables']['journal_entries']['Insert'] = {
+            user_id: user.id,
+            content: suggestion.Description || '',
+            mood: (['neutral', 'positive', 'negative'].includes(suggestion.Mood as any) ? suggestion.Mood : null) as string | null,
+            tags: suggestion.Tags || null,
+            entry_date: suggestion.EntryDate ? new Date(suggestion.EntryDate).toISOString() : new Date().toISOString()
+          };
+          await addJournalEntry(journalEntryToInsert);
+          break
       }
-      toast.success(`${suggestion.type.charAt(0).toUpperCase() + suggestion.type.slice(1)} added successfully!`);
+      
+      toast.success(`${(suggestion.Type || 'item').charAt(0).toUpperCase() + (suggestion.Type || 'item').slice(1)} added successfully!`)
+      onSuggestionDecision(message.id, suggestion.Id, 'accepted')
     } catch (error) {
-      console.error('Error adding suggestion:', error);
-      toast.error('Failed to add suggestion. Please try again.');
+      console.error('Error adding suggestion:', error)
+      toast.error('Failed to add suggestion. Please try again.')
     } finally {
-      setIsProcessing(false);
+      setIsProcessing(prev => ({ ...prev, [suggestion.Id]: false }))
     }
-  };
+  }, [user, isProcessing, addTask, addGoal, addHabit, addJournalEntry, onSuggestionDecision, message.id])
 
-  const handleRejectSuggestion = (suggestion: Suggestion, index: number) => {
-    console.log('MessageDisplay handleRejectSuggestion called:', { suggestion, index, messageId: message.id });
-    if (onRejectSuggestion) {
-      onRejectSuggestion(message.id, index);
-    }
-    toast.success('Suggestion rejected');
-  };
+  const handleRejectSuggestion = useCallback((suggestionId: string) => {
+    onSuggestionDecision(message.id, suggestionId, 'rejected')
+    toast.success('Suggestion rejected')
+  }, [message.id, onSuggestionDecision])
 
   return (
-    <div
-      className={`flex ${message.role === 'user' ? 'justify-end' : 'justify-start'} mb-4`}
-    >
+    <div className={`flex ${message.role === 'user' ? 'justify-end' : 'justify-start'} mb-6`}>
       <div
-        className={`max-w-[80%] rounded-lg p-4 ${
+        className={`max-w-[80%] rounded-2xl p-4 ${
           message.role === 'user'
-            ? 'bg-blue-500 text-white'
-            : 'bg-gray-100 text-gray-800'
+            ? 'bg-gradient-to-r from-purple-600 to-indigo-700 text-white'
+            : 'bg-gradient-to-r from-gray-800 to-gray-900 text-gray-100 border border-gray-700'
         }`}
-        style={{
-          opacity: animatedIn ? 1 : 0,
-          transform: `translateY(${animatedIn ? '0' : '20px'})`,
-          transition: message.animate ? 'opacity 0.5s ease-out, transform 0.5s ease-out' : 'none'
-        }}
       >
-        <div>
-          {displayedContent.split('\n').map((line, i) => {
-            if (line.startsWith('## ')) {
-              return <h2 key={i} className="text-xl font-bold mt-4 mb-2">{line.slice(3)}</h2>;
-            }
-            if (line.startsWith('### ')) {
-              return <h3 key={i} className="text-lg font-semibold mt-3 mb-1">{line.slice(4)}</h3>;
-            }
-            if (line.startsWith('* ') || line.startsWith('- ')) {
-              return <li key={i} className="ml-4">{line.slice(2)}</li>;
-            }
-            if (line.match(/\*\*(.*?)\*\*/)) {
-              return <strong key={i}>{line.replace(/\*\*(.*?)\*\*/g, '$1')}</strong>;
-            }
-            if (line.match(/\*(.*?)\*/)) {
-              return <em key={i}>{line.replace(/\*(.*?)\*/g, '$1')}</em>;
-            }
-            if (line.match(/$$(.*?)$$$$(.*?)$$/)) {
-              return (
-                <a
-                  key={i}
-                  href={line.match(/$$(.*?)$$$$(.*?)$$/)?.[2]}
-                  className="text-blue-500 hover:underline"
-                  target="_blank"
-                  rel="noopener noreferrer"
-                >
-                  {line.match(/$$(.*?)$$$$(.*?)$$/)?.[1]}
-                </a>
-              );
-            }
-            return <p key={i}>{line}</p>;
-          })}
-        </div>
+        {/* Loading state */}
+        {message.isLoading && !displayedContent ? (
+          <div className="flex space-x-2">
+            <div className="w-2 h-2 bg-purple-400 rounded-full animate-bounce" style={{ animationDelay: '0ms' }} />
+            <div className="w-2 h-2 bg-purple-400 rounded-full animate-bounce" style={{ animationDelay: '150ms' }} />
+            <div className="w-2 h-2 bg-purple-400 rounded-full animate-bounce" style={{ animationDelay: '300ms' }} />
+          </div>
+        ) : (
+          <>
+            {/* Message content */}
+            {(displayedContent || message.content) && (
+              <div className="prose prose-sm max-w-none mb-4 text-gray-100">
+                {parseMessageContent(displayedContent || message.content)}
+                {isAnimating && <span className="inline-block w-2 h-4 bg-purple-400 animate-pulse ml-1" />}
+              </div>
+            )}
 
-        {message.suggestions && message.suggestions.length > 0 && (
-          <div className="mt-4 space-y-2">
-            {message.suggestions.map((suggestion, index) => (
-              <div
-                key={index}
-                className="bg-white/10 p-3 rounded-lg"
-                style={{
-                  opacity: 0,
-                  transform: 'translateY(10px)',
-                  animation: `fadeInUp 0.5s ease-out ${index * 0.1}s forwards`
-                }}
-              >
-                <div className="flex justify-between items-start">
-                  <div>
-                    <h4 className="font-semibold">{suggestion.title}</h4>
-                    {suggestion.description && (
-                      <p className="text-sm opacity-80">{suggestion.description}</p>
-                    )}
-                    <div className="flex gap-2 mt-2">
-                      {suggestion.priority && (
-                        <span className="text-xs px-2 py-1 rounded-full bg-blue-500/20">
-                          {suggestion.priority}
-                        </span>
+            {/* Suggestions */}
+            {message.suggestions && message.suggestions.length > 0 && (
+              <div className="mt-6 space-y-6">
+                <p className="text-sm font-semibold text-purple-300 mb-2">Suggestions:</p>
+                {message.suggestions.map((suggestion) => (
+                  <div
+                    key={suggestion.Id}
+                    className="group relative overflow-hidden rounded-3xl backdrop-blur-xl bg-white/10 border border-white/20 shadow-2xl hover:shadow-purple-500/25 transition-all duration-500 hover:scale-[1.02] hover:bg-white/15"
+                  >
+                    {/* Gradient Border Animation */}
+                    <div className="absolute inset-0 rounded-3xl bg-gradient-to-r from-purple-500/20 via-pink-500/20 to-cyan-500/20 opacity-0 group-hover:opacity-100 transition-opacity duration-500" />
+                    
+                    {/* Priority Strip */}
+                    <div className={`absolute top-0 left-0 right-0 h-1 bg-gradient-to-r ${getPriorityColor(suggestion.Priority)}`} />
+                    
+                    <div className="relative p-6">
+                      {/* Header Section */}
+                      <div className="flex items-start justify-between mb-6">
+                        <div className="flex items-center space-x-3">
+                          <div className="p-3 bg-gradient-to-r from-purple-500/20 to-pink-500/20 rounded-2xl backdrop-blur-sm">
+                            {getIconForSuggestionType(suggestion.Type)}
+                          </div>
+                          <div>
+                            <h3 className="text-xl font-bold text-white mb-1 group-hover:text-purple-300 transition-colors">
+                              {suggestion.Title || 'Untitled suggestion'}
+                            </h3>
+                            <div className="flex items-center space-x-2">
+                              <span className="text-sm text-purple-300 font-medium">
+                                { (suggestion.Type || '').charAt(0).toUpperCase() + (suggestion.Type || '').slice(1) }
+                              </span>
+                              {suggestion.Priority && (
+                                <span className={`px-3 py-1 rounded-full text-xs font-bold text-white bg-gradient-to-r ${getPriorityColor(suggestion.Priority)}`}>
+                                  {suggestion.Priority.toUpperCase()}
+                                </span>
+                              )}
+                            </div>
+                          </div>
+                        </div>
+
+                        {/* Status Badge */}
+                        <div className="flex items-center space-x-2">
+                          {suggestion.Decision === 'accepted' && (
+                            <div className="flex items-center space-x-2 px-4 py-2 bg-gradient-to-r from-green-500/20 to-emerald-500/20 rounded-full border border-green-500/30 backdrop-blur-sm">
+                              <CheckCircle className="w-4 h-4 text-green-400" />
+                              <span className="text-green-300 text-sm font-medium">Accepted</span>
+                            </div>
+                          )}
+                          {suggestion.Decision === 'rejected' && (
+                            <div className="flex items-center space-x-2 px-4 py-2 bg-gradient-to-r from-red-500/20 to-pink-500/20 rounded-full border border-red-500/30 backdrop-blur-sm">
+                              <XCircle className="w-4 h-4 text-red-400" />
+                              <span className="text-red-300 text-sm font-medium">Rejected</span>
+                            </div>
+                          )}
+                        </div>
+                      </div>
+
+                      {/* Description */}
+                      {suggestion.Description && (
+                        <p className="text-purple-100 text-base leading-relaxed mb-6 bg-white/5 p-4 rounded-xl backdrop-blur-sm">
+                          {suggestion.Description}
+                        </p>
                       )}
-                      {suggestion.dueDate && (
-                        <span className="text-xs px-2 py-1 rounded-full bg-green-500/20">
-                          {suggestion.dueDate}
-                        </span>
+
+                      {/* Details Grid */}
+                      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 mb-6">
+                        {suggestion.DueDate && (
+                          <div className="flex items-center space-x-2 text-purple-200">
+                            <Calendar className="w-4 h-4 text-purple-400" />
+                            <span className="text-sm">Due: {new Date(suggestion.DueDate).toLocaleDateString()}</span>
+                          </div>
+                        )}
+                        {suggestion.Frequency && (
+                          <div className="flex items-center space-x-2 text-purple-200">
+                            <Clock className="w-4 h-4 text-purple-400" />
+                            <span className="text-sm">Frequency: {suggestion.Frequency}</span>
+                          </div>
+                        )}
+                        {suggestion.Progress !== undefined && (
+                          <div className="flex items-center space-x-2 text-purple-200">
+                            <Target className="w-4 h-4 text-purple-400" />
+                            <span className="text-sm">Progress: {suggestion.Progress}%</span>
+                          </div>
+                        )}
+                      </div>
+
+                      {/* Progress Bar */}
+                      {suggestion.Progress !== undefined && (
+                        <div className="mb-6">
+                          <div className="flex justify-between items-center mb-2">
+                            <span className="text-sm text-purple-300">Progress</span>
+                            <span className="text-sm text-purple-300 font-bold">{suggestion.Progress}%</span>
+                          </div>
+                          <div className="w-full bg-white/10 rounded-full h-2 backdrop-blur-sm">
+                            <div 
+                              className="bg-gradient-to-r from-purple-500 to-pink-500 h-2 rounded-full transition-all duration-1000 ease-out shadow-lg"
+                              style={{ width: `${suggestion.Progress}%` }}
+                            />
+                          </div>
+                        </div>
                       )}
-                      {suggestion.frequency && (
-                        <span className="text-xs px-2 py-1 rounded-full bg-purple-500/20">
-                          {suggestion.frequency}
-                        </span>
+
+                      {/* Tags */}
+                      {suggestion.Tags && suggestion.Tags.length > 0 && (
+                        <div className="flex flex-wrap gap-2 mb-6">
+                          {suggestion.Tags.map((tag, index) => (
+                            <span
+                              key={index}
+                              className="inline-flex items-center space-x-1 px-3 py-1 bg-gradient-to-r from-purple-500/20 to-pink-500/20 rounded-full text-xs text-purple-200 border border-purple-500/30 backdrop-blur-sm hover:bg-purple-500/30 transition-colors"
+                            >
+                              <Tag className="w-3 h-3" />
+                              <span>{tag}</span>
+                            </span>
+                          ))}
+                        </div>
+                      )}
+
+                      {/* Action Buttons */}
+                      {suggestion.Decision === null && (
+                        <div className="flex justify-end space-x-3">
+                          <button
+                            onClick={() => handleRejectSuggestion(suggestion.Id)}
+                            disabled={isProcessing[suggestion.Id]}
+                            className="px-6 py-3 bg-gradient-to-r from-red-500/20 to-pink-500/20 border border-red-500/30 text-red-300 rounded-2xl font-medium hover:from-red-500/30 hover:to-pink-500/30 hover:border-red-500/50 transition-all duration-300 backdrop-blur-sm hover:scale-105 disabled:opacity-50 disabled:cursor-not-allowed"
+                          >
+                            {isProcessing[suggestion.Id] ? (
+                              <div className="flex items-center space-x-2">
+                                <div className="w-4 h-4 border-2 border-red-400 border-t-transparent rounded-full animate-spin" />
+                                <span>Processing...</span>
+                              </div>
+                            ) : (
+                              <div className="flex items-center space-x-2">
+                                <XCircle className="w-4 h-4" />
+                                <span>Decline</span>
+                              </div>
+                            )}
+                          </button>
+                          <button
+                            onClick={() => handleAcceptSuggestion(suggestion)}
+                            disabled={isProcessing[suggestion.Id]}
+                            className="px-6 py-3 bg-gradient-to-r from-purple-500 to-pink-500 text-white rounded-2xl font-medium hover:from-purple-600 hover:to-pink-600 transition-all duration-300 shadow-lg hover:shadow-purple-500/25 hover:scale-105 disabled:opacity-50 disabled:cursor-not-allowed"
+                          >
+                            {isProcessing[suggestion.Id] ? (
+                              <div className="flex items-center space-x-2">
+                                <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                                <span>Processing...</span>
+                              </div>
+                            ) : (
+                              <div className="flex items-center space-x-2">
+                                <Plus className="w-4 h-4" />
+                                <span>Accept</span>
+                              </div>
+                            )}
+                          </button>
+                        </div>
                       )}
                     </div>
-                  </div>
-                  <div className="flex gap-2">
-                    <button
-                      onClick={() => handleAcceptSuggestion(suggestion)}
-                      disabled={isProcessing}
-                      className="px-3 py-1 text-sm bg-green-500 text-white rounded hover:bg-green-600 disabled:opacity-50"
-                    >
-                      Accept
-                    </button>
-                    <button
-                      onClick={() => handleRejectSuggestion(suggestion, index)}
-                      disabled={isProcessing}
-                      className="px-3 py-1 text-sm bg-red-500 text-white rounded hover:bg-red-600 disabled:opacity-50"
-                    >
-                      Reject
-                    </button>
-                  </div>
-                </div>
-              </div>
-            ))}
-          </div>
-        )}
 
-        {message.isLoading && (
-          <div className="flex space-x-2 mt-2">
-            <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce" style={{ animationDelay: '0ms' }} />
-            <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce" style={{ animationDelay: '150ms' }} />
-            <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce" style={{ animationDelay: '300ms' }} />
-          </div>
+                    {/* Floating Particles Effect */}
+                    <div className="absolute inset-0 pointer-events-none overflow-hidden rounded-3xl">
+                      <div className="absolute -top-2 -right-2 w-4 h-4 bg-purple-500/30 rounded-full animate-pulse" />
+                      <div className="absolute top-1/2 -left-1 w-2 h-2 bg-pink-500/40 rounded-full animate-ping" />
+                      <div className="absolute -bottom-1 left-1/3 w-3 h-3 bg-cyan-500/30 rounded-full animate-bounce" />
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </>
         )}
       </div>
     </div>
-  );
-});
+  )
+})
 
-// Optional: Provide a display name for debugging purposes
-MessageDisplay.displayName = 'MessageDisplay';
+MessageDisplay.displayName = 'MessageDisplay'
 
 export default function AIPlansPage() {
   const { user } = useAuthStore()
@@ -295,31 +520,45 @@ export default function AIPlansPage() {
   const [editingChatId, setEditingChatId] = useState<string | null>(null)
   const [editedChatTitle, setEditedChatTitle] = useState('')
   const messagesEndRef = useRef<HTMLDivElement>(null)
+  const inputRef = useRef<HTMLInputElement>(null)
   const { addTask, addGoal, addHabit, addJournalEntry } = useAIAgent()
 
-  // Load chats from localStorage on component mount
+  // Load chats from localStorage
   useEffect(() => {
     if (user?.id) {
       const savedChats = localStorage.getItem(`ai-chats-${user.id}`)
       if (savedChats) {
-        const parsedChats = JSON.parse(savedChats)
-        setChats(parsedChats.map((chat: Chat) => ({
-          ...chat,
-          createdAt: new Date(chat.createdAt),
-          updatedAt: new Date(chat.updatedAt),
-          messages: chat.messages.map((msg: Message) => ({
-            ...msg,
-            timestamp: new Date(msg.timestamp)
-          }))
-        })))
+        try {
+          const parsedChats = JSON.parse(savedChats)
+          setChats(parsedChats.map((chat: Chat) => ({
+            ...chat,
+            createdAt: new Date(chat.createdAt),
+            updatedAt: new Date(chat.updatedAt),
+            messages: chat.messages.map((msg: Message) => ({
+              ...msg,
+              timestamp: new Date(msg.timestamp),
+              suggestions: msg.suggestions?.map(s => ({
+                ...s,
+                Id: s.Id || uuidv4(),
+                Title: s.Title || 'Untitled suggestion'
+              }))
+            }))
+          })))
+        } catch (error) {
+          console.error('Error loading chats:', error)
+        }
       }
     }
   }, [user?.id])
 
-  // Save chats to localStorage whenever they change
+  // Save chats to localStorage
   useEffect(() => {
     if (user?.id && chats.length > 0) {
-      localStorage.setItem(`ai-chats-${user.id}`, JSON.stringify(chats))
+      try {
+        localStorage.setItem(`ai-chats-${user.id}`, JSON.stringify(chats))
+      } catch (error) {
+        console.error('Error saving chats:', error)
+      }
     }
   }, [chats, user?.id])
 
@@ -328,12 +567,14 @@ export default function AIPlansPage() {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
   }, [currentChat?.messages])
 
-  // Debug currentChat changes
+  // Focus input when chat changes
   useEffect(() => {
-    console.log('currentChat changed:', currentChat);
+    if (currentChat && inputRef.current) {
+      inputRef.current.focus()
+    }
   }, [currentChat])
 
-  const createNewChat = () => {
+  const createNewChat = useCallback(() => {
     const newChat: Chat = {
       id: uuidv4(),
       title: 'New Chat',
@@ -344,54 +585,109 @@ export default function AIPlansPage() {
     setChats(prev => [newChat, ...prev])
     setCurrentChat(newChat)
     setShowRecentChats(false)
-  }
+    setEditingChatId(null)
+    setInput('')
+  }, [])
 
-  const deleteChat = (chatId: string) => {
+  const deleteChat = useCallback((chatId: string) => {
     setChats(prev => prev.filter(chat => chat.id !== chatId))
     if (currentChat?.id === chatId) {
       setCurrentChat(null)
     }
-  }
+  }, [currentChat?.id])
 
-  const handleSaveChatTitle = (chatId: string) => {
+  const handleSaveChatTitle = useCallback((chatId: string) => {
+    if (!editedChatTitle.trim()) return
+    
     setChats(prev =>
       prev.map(chat =>
-        chat.id === chatId ? { ...chat, title: editedChatTitle, updatedAt: new Date() } : chat
+        chat.id === chatId 
+          ? { ...chat, title: editedChatTitle.trim(), updatedAt: new Date() } 
+          : chat
       )
     )
+    
     if (currentChat?.id === chatId) {
-      setCurrentChat(prev => (prev ? { ...prev, title: editedChatTitle, updatedAt: new Date() } : null))
+      setCurrentChat(prev => 
+        prev ? { ...prev, title: editedChatTitle.trim(), updatedAt: new Date() } : null
+      )
     }
+    
     setEditingChatId(null)
-  }
+    setEditedChatTitle('')
+  }, [editedChatTitle, currentChat?.id])
 
-  const handleSendMessage = async () => {
-    if (!input.trim() || !currentChat || !user) return
+  const handleSuggestionDecision = useCallback((
+    messageId: string, 
+    suggestionId: string, 
+    decision: 'accepted' | 'rejected'
+  ) => {
+    if (!currentChat) return
+
+    const updatedMessages = currentChat.messages.map(message => {
+      if (message.id === messageId && message.suggestions) {
+        const updatedSuggestions = message.suggestions.map(suggestion => {
+          if (suggestion.Id === suggestionId) {
+            return { ...suggestion, Decision: decision }
+          }
+          return suggestion
+        })
+        return { ...message, suggestions: updatedSuggestions }
+      }
+      return message
+    })
+
+    const updatedChat = {
+      ...currentChat,
+      messages: updatedMessages,
+      updatedAt: new Date()
+    }
+
+    setChats(prev => prev.map(chat => 
+      chat.id === currentChat.id ? updatedChat : chat
+    ))
+    setCurrentChat(updatedChat)
+  }, [currentChat])
+
+  const handleSendMessage = useCallback(async () => {
+    if (!input.trim() || !currentChat || !user || isLoading) return
 
     const userMessage: Message = {
       id: uuidv4(),
       role: 'user',
-      content: input,
-      timestamp: new Date()
+      content: input.trim(),
+      timestamp: new Date(),
+      animate: false
     }
 
-    // Add user message to chat
-    let newMessages = [...currentChat.messages, userMessage];
+    // Add user message
+    let newMessages = [...currentChat.messages, userMessage]
 
-    // Enforce MAX_MESSAGES_PER_CHAT limit
+    // Enforce message limit
     if (newMessages.length > MAX_MESSAGES_PER_CHAT) {
-      newMessages = newMessages.slice(1); // Remove the oldest message
+      newMessages = newMessages.slice(-MAX_MESSAGES_PER_CHAT)
     }
 
+    // Create temporary assistant message for loading
+    const tempAssistantId = uuidv4()
+    const tempAssistantMessage: Message = {
+      id: tempAssistantId,
+      role: 'assistant',
+      content: '',
+      timestamp: new Date(),
+      isLoading: true,
+      animate: false
+    }
+    newMessages.push(tempAssistantMessage)
+
+    // Update chat with new messages
     const updatedChat = {
       ...currentChat,
       messages: newMessages,
-      updatedAt: new Date()
-    }
-
-    // If this is the first message in a new chat, set the title
-    if (currentChat.messages.length === 0) {
-      updatedChat.title = input.substring(0, 30) + (input.length > 30 ? '...' : '');
+      updatedAt: new Date(),
+      title: currentChat.messages.length === 0 
+        ? input.substring(0, 30) + (input.length > 30 ? '...' : '')
+        : currentChat.title
     }
 
     setChats(prev => prev.map(chat => 
@@ -402,320 +698,357 @@ export default function AIPlansPage() {
     setIsLoading(true)
 
     try {
-      // Get the last 5 messages for context
-      const recentMessages = currentChat.messages.slice(-5).map(msg => ({
-        role: msg.role,
-        content: msg.content
-      }))
+      // Get context for AI
+      const recentMessages = updatedChat.messages
+        .filter(msg => msg.id !== tempAssistantId)
+        .slice(-5)
+        .map(msg => ({
+          role: msg.role,
+          content: msg.content
+        }))
 
-      // Get recent items for context
+      // Fetch user context
       const [tasksResult, goalsResult, habitsResult] = await Promise.all([
         taskService.getUserTasks(user.id),
         goalService.getUserGoals(user.id),
         habitService.getUserHabits(user.id)
       ])
 
-      // Get AI response with context
+      // Get AI response
       const aiResponse = await aiService.getResponse(input, {
-        recentTasks: tasksResult.data?.slice(0, 5),
-        recentGoals: goalsResult.data?.slice(0, 5),
-        recentHabits: habitsResult.data?.slice(0, 5),
+        recentTasks: tasksResult.data?.slice(0, 5) || [],
+        recentGoals: goalsResult.data?.slice(0, 5) || [],
+        recentHabits: habitsResult.data?.slice(0, 5) || [],
         recentMessages
       })
-      
-      const assistantMessage: Message = {
-        id: uuidv4(),
-        role: 'assistant',
-        content: aiResponse.content,
-        timestamp: new Date(),
-        suggestions: aiResponse.suggestions,
-        animate: true
-      }
 
-      // Add AI response to chat
-      let finalMessages = [...updatedChat.messages, assistantMessage];
+      // Add IDs and ensure titles exist for suggestions
+      const suggestionsWithIds = (aiResponse.suggestions || []).map(s => ({
+        ...s,
+        Id: uuidv4(),
+        Title: s.title || 'Untitled suggestion',
+        Description: s.description || '',
+        Decision: null,
+        Type: s.type,
+      }))
 
-      // Enforce MAX_MESSAGES_PER_CHAT limit for AI response
-      if (finalMessages.length > MAX_MESSAGES_PER_CHAT) {
-        finalMessages = finalMessages.slice(1); // Remove the oldest message
-      }
+      // Update temp message with actual response
+      const finalMessages = newMessages.map(msg =>
+        msg.id === tempAssistantId
+          ? {
+              ...msg,
+              content: aiResponse.content || 'I apologize, but I couldn\'t generate a response.',
+              suggestions: suggestionsWithIds,
+              isLoading: false,
+              animate: true
+            }
+          : msg
+      )
 
       const finalChat = {
         ...updatedChat,
-        messages: finalMessages,
-        updatedAt: new Date()
+        messages: finalMessages
       }
+
+      // FIX: Update state with the final chat
       setChats(prev => prev.map(chat => 
         chat.id === currentChat.id ? finalChat : chat
       ))
       setCurrentChat(finalChat)
+
     } catch (error) {
       console.error('Error getting AI response:', error)
-      // Add error message with more details
-      const errorMessage: Message = {
-        id: uuidv4(),
-        role: 'assistant',
-        content: `I apologize, but I'm having trouble processing your request right now. ${error instanceof Error ? error.message : 'Please try again later.'}`,
-        timestamp: new Date()
-      }
-      const finalChat = {
+      
+      // Update temp message with error
+      const errorMessages = newMessages.map(msg =>
+        msg.id === tempAssistantId
+          ? {
+              ...msg,
+              content: `I apologize, but I encountered an error: ${
+                error instanceof Error ? error.message : 'Please try again later.'
+              }`,
+              isLoading: false,
+              animate: false
+            }
+          : msg
+      )
+
+      const errorChat = {
         ...updatedChat,
-        messages: [...updatedChat.messages, errorMessage],
-        updatedAt: new Date()
+        messages: errorMessages
       }
+
       setChats(prev => prev.map(chat => 
-        chat.id === currentChat.id ? finalChat : chat
+        chat.id === currentChat.id ? errorChat : chat
       ))
-      setCurrentChat(finalChat)
+      setCurrentChat(errorChat)
     } finally {
       setIsLoading(false)
     }
-  }
+  }, [input, currentChat, user, isLoading])
 
-  const handleRejectSuggestion = (chatId: string, messageId: string, suggestionIndex: number) => {
-    console.log('Main handleRejectSuggestion called:', { chatId, messageId, suggestionIndex });
-    console.log('Current chat ID:', currentChat?.id);
-    console.log('Current chat messages before update:', currentChat?.messages);
-    
-    // Update chats state
-    setChats(prev => {
-      console.log('Previous chats state:', prev);
-      const updatedChats = prev.map(chat => {
-        if (chat.id === chatId) {
-          console.log('Found matching chat:', chat.id);
-          const updatedMessages = chat.messages.map(message => {
-            if (message.id === messageId && message.suggestions) {
-              console.log('Found matching message:', message.id, 'with suggestions:', message.suggestions);
-              const updatedSuggestions = message.suggestions.filter((_, index) => index !== suggestionIndex);
-              console.log('Updated suggestions for message:', messageId, updatedSuggestions);
-              return {
-                ...message,
-                suggestions: updatedSuggestions
-              };
-            }
-            return message;
-          });
-          return {
-            ...chat,
-            messages: updatedMessages
-          };
-        }
-        return chat;
-      });
-      console.log('Updated chats state:', updatedChats);
-      return updatedChats;
-    });
-
-    // Update currentChat state if it's the same chat
-    if (currentChat?.id === chatId) {
-      console.log('Updating currentChat state');
-      setCurrentChat(prev => {
-        if (!prev) return null;
-        const updatedMessages = prev.messages.map(message => {
-          if (message.id === messageId && message.suggestions) {
-            const updatedSuggestions = message.suggestions.filter((_, index) => index !== suggestionIndex);
-            console.log('Updated current chat suggestions for message:', messageId, updatedSuggestions);
-            return {
-              ...message,
-              suggestions: updatedSuggestions
-            };
-          }
-          return message;
-        });
-        const updatedChat = {
-          ...prev,
-          messages: updatedMessages
-        };
-        console.log('Updated currentChat:', updatedChat);
-        return updatedChat;
-      });
-    }
-  };
+  const selectChat = useCallback((chat: Chat) => {
+    setCurrentChat(chat)
+    setShowRecentChats(false)
+    setEditingChatId(null)
+    setEditedChatTitle('')
+    setInput('')
+  }, [])
 
   if (!user) {
     return (
-      <div className="flex items-center justify-center h-64">
-        <p className="text-gray-600 dark:text-gray-400">Please log in to use AI Plans</p>
+      <div className="flex items-center justify-center h-full">
+        <div className="text-center">
+          <MessageSquare className="w-12 h-12 text-gray-400 mx-auto mb-4" />
+          <p className="text-gray-600 dark:text-gray-400">Please log in to use AI Plans</p>
+        </div>
       </div>
     )
   }
 
   return (
-    <div className="h-full flex">
-      {/* Recent Chats Sidebar */}
+    <div className="h-full flex bg-gradient-to-br from-gray-900 to-gray-950">
+      {/* Sidebar */}
       <div
-        className={`w-80 bg-white dark:bg-gray-800 border-r dark:border-gray-700 transition-transform duration-300 flex flex-col h-full ${showRecentChats ? 'translate-x-0' : '-translate-x-full'} md:translate-x-0`}
+        className={`${
+          showRecentChats ? 'translate-x-0' : '-translate-x-full'
+        } md:translate-x-0 fixed md:relative w-80 h-full bg-gradient-to-b from-gray-800 to-gray-900 border-r border-gray-700 transition-transform duration-300 flex flex-col z-30`}
       >
-        {/* Header section with fixed height */}
-        <div className="p-4 border-b dark:border-gray-700 flex-shrink-0">
+        {/* Sidebar Header */}
+        <div className="p-4 border-b border-gray-700 flex-shrink-0">
           <button
             onClick={createNewChat}
-            className="w-full bg-purple-600 text-white px-4 py-2 rounded-md hover:bg-purple-700 flex items-center justify-center space-x-2"
+            className="w-full bg-gradient-to-r from-purple-600 to-indigo-700 text-white px-4 py-2 rounded-lg hover:from-purple-700 hover:to-indigo-800 transition-all duration-300 flex items-center justify-center space-x-2 shadow-lg hover:shadow-purple-500/20"
           >
             <Plus className="w-5 h-5" />
             <span>New Chat</span>
           </button>
         </div>
-        {/* Chat list with scrolling enabled, constrained by flex-1 */}
-        <div className="flex-1 overflow-y-auto min-h-0">
-          {chats.map(chat => (
-            <div
-              key={chat.id}
-              className={`p-4 border-b dark:border-gray-700 cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-700 ${
-                currentChat?.id === chat.id ? 'bg-purple-50 dark:bg-purple-900' : ''
-              }`}
-              onClick={() => {
-                setCurrentChat(chat)
-                setShowRecentChats(false)
-                setEditingChatId(null)
-              }}
-            >
-              <div className="flex items-center justify-between">
-                <div className="flex items-center space-x-2 flex-1 min-w-0">
-                  {editingChatId === chat.id ? (
-                    <input
-                      type="text"
-                      value={editedChatTitle}
-                      onChange={(e) => setEditedChatTitle(e.target.value)}
-                      onBlur={() => handleSaveChatTitle(chat.id)}
-                      onKeyPress={(e) => {
-                        if (e.key === 'Enter') {
-                          handleSaveChatTitle(chat.id)
-                          e.currentTarget.blur()
-                        }
-                      }}
-                      className="flex-1 px-2 py-1 bg-gray-100 dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-md text-sm truncate"
-                      autoFocus
-                    />
-                  ) : (
-                    <span className="text-sm font-medium truncate">
-                      {chat.title}
-                    </span>
-                  )}
-                </div>
-                <Popover>
-                  <PopoverTrigger asChild>
-                    <button
-                      className="ml-2 p-1 rounded-full hover:bg-gray-200 dark:hover:bg-gray-700 text-gray-500 dark:text-gray-400"
-                      onClick={(e) => e.stopPropagation()}
-                    >
-                      <MoreVertical className="w-4 h-4" />
-                    </button>
-                  </PopoverTrigger>
-                  <PopoverContent className="w-32 p-1">
-                    <button
-                      className="w-full text-left px-3 py-2 text-sm text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-md flex items-center"
-                      onClick={(e) => {
-                        e.stopPropagation()
-                        setEditingChatId(chat.id)
-                        setEditedChatTitle(chat.title)
-                      }}
-                    >
-                      <Edit className="w-4 h-4 mr-2" />
-                      Edit
-                    </button>
-                    <button
-                      className="w-full text-left px-3 py-2 text-sm text-red-600 hover:bg-red-50 dark:hover:bg-red-900 rounded-md flex items-center mt-1"
-                      onClick={(e) => {
-                        e.stopPropagation()
-                        deleteChat(chat.id)
-                      }}
-                    >
-                      <Trash2 className="w-4 h-4 mr-2" />
-                      Delete
-                    </button>
-                  </PopoverContent>
-                </Popover>
-              </div>
-              <div className="mt-1 text-xs text-gray-500">
-                {new Date(chat.updatedAt).toLocaleDateString()}
-              </div>
+
+        {/* Chat List */}
+        <div className="flex-1 overflow-y-auto">
+          {chats.length === 0 ? (
+            <div className="p-4 text-center text-gray-400">
+              <p className="text-sm">No chats yet</p>
+              <p className="text-xs mt-1">Start a new conversation</p>
             </div>
-          ))}
+          ) : (
+            chats.map(chat => (
+              <div
+                key={chat.id}
+                className={`p-4 border-b border-gray-700 cursor-pointer hover:bg-gray-800/50 transition-colors ${
+                  currentChat?.id === chat.id ? 'bg-gradient-to-r from-purple-900/30 to-indigo-900/30' : ''
+                }`}
+                onClick={() => selectChat(chat)}
+              >
+                <div className="flex items-center justify-between">
+                  <div className="flex-1 min-w-0 mr-2">
+                    {editingChatId === chat.id ? (
+                      <input
+                        type="text"
+                        value={editedChatTitle}
+                        onChange={(e) => setEditedChatTitle(e.target.value)}
+                        onBlur={() => handleSaveChatTitle(chat.id)}
+                        onKeyPress={(e) => {
+                          if (e.key === 'Enter') {
+                            handleSaveChatTitle(chat.id)
+                          }
+                        }}
+                        onClick={(e) => e.stopPropagation()}
+                        className="w-full px-2 py-1 bg-gray-700 border border-gray-600 rounded text-sm text-white"
+                        autoFocus
+                      />
+                    ) : (
+                      <h3 className="text-sm font-medium truncate text-white">
+                        {chat.title}
+                      </h3>
+                    )}
+                    <p className="text-xs text-gray-400 mt-1">
+                      {new Date(chat.updatedAt).toLocaleDateString()}
+                    </p>
+                  </div>
+
+                  <Popover>
+                    <PopoverTrigger asChild>
+                      <button
+                        className="p-1 rounded hover:bg-gray-700"
+                        onClick={(e) => e.stopPropagation()}
+                      >
+                        <MoreVertical className="w-4 h-4 text-gray-400" />
+                      </button>
+                    </PopoverTrigger>
+                    <PopoverContent className="w-32 p-1 bg-gray-800 border border-gray-700">
+                      <button
+                        className="w-full text-left px-3 py-2 text-sm hover:bg-gray-700 rounded flex items-center text-gray-200"
+                        onClick={(e) => {
+                          e.stopPropagation()
+                          setEditingChatId(chat.id)
+                          setEditedChatTitle(chat.title)
+                        }}
+                      >
+                        <Edit className="w-4 h-4 mr-2" />
+                        Edit
+                      </button>
+                      <button
+                        className="w-full text-left px-3 py-2 text-sm text-red-400 hover:bg-red-900/20 rounded flex items-center"
+                        onClick={(e) => {
+                          e.stopPropagation()
+                          deleteChat(chat.id)
+                        }}
+                      >
+                        <Trash2 className="w-4 h-4 mr-2" />
+                        Delete
+                      </button>
+                    </PopoverContent>
+                  </Popover>
+                </div>
+              </div>
+            ))
+          )}
         </div>
       </div>
 
       {/* Main Chat Area */}
-      <div className="flex-1 flex flex-col h-full min-h-0">
+      <div className="flex-1 flex flex-col h-full">
         {/* Chat Header */}
-        <div className="p-4 border-b dark:border-gray-700 flex items-center justify-between flex-shrink-0">
+        <div className="p-4 bg-gradient-to-r from-gray-800 to-gray-900 border-b border-gray-700 flex items-center justify-between flex-shrink-0">
           <button
             onClick={() => setShowRecentChats(!showRecentChats)}
-            className="md:hidden text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200"
+            className="md:hidden p-2 hover:bg-gray-700 rounded-md"
           >
-            <MessageSquare className="w-6 h-6" />
+            <MessageSquare className="w-5 h-5 text-gray-300" />
           </button>
-          <h1 className="text-xl font-semibold text-gray-900 dark:text-white">
-            {currentChat?.title || 'AI Plans'}
+          
+          <h1 className="text-xl font-semibold text-white">
+            {currentChat?.title || 'AI Assistant'}
           </h1>
+          
           {!currentChat && (
             <button
               onClick={createNewChat}
-              className="bg-purple-600 text-white px-4 py-2 rounded-md hover:bg-purple-700 flex items-center space-x-2"
+              className="bg-gradient-to-r from-purple-600 to-indigo-700 text-white px-4 py-2 rounded-md hover:from-purple-700 hover:to-indigo-800 transition-colors flex items-center space-x-2"
             >
               <Plus className="w-5 h-5" />
-              <span>New Chat</span>
+              <span className="hidden md:inline">New Chat</span>
             </button>
           )}
         </div>
 
         {/* Messages Area */}
-        <div className="flex-1 overflow-y-auto p-4 space-y-4 min-h-0">
+        <div className="flex-1 overflow-y-auto p-4 bg-gradient-to-b from-gray-900 to-gray-950">
           {currentChat ? (
-            currentChat.messages.map(message => (
-              <MessageDisplay 
-                key={message.id} 
-                message={message} 
-                addTask={addTask} 
-                addGoal={addGoal} 
-                addHabit={addHabit} 
-                addJournalEntry={addJournalEntry} 
-                user={user} 
-                toast={toast} 
-                onRejectSuggestion={(messageId, suggestionIndex) => {
-                  handleRejectSuggestion(currentChat.id, messageId, suggestionIndex)
-                }}
-              />
-            ))
+            <div className="max-w-4xl mx-auto">
+              {currentChat.messages.length === 0 ? (
+                <div className="h-full flex flex-col items-center justify-center py-12">
+                  <div className="bg-gradient-to-r from-purple-500 to-indigo-600 p-4 rounded-full mb-6">
+                    <MessageSquare className="w-12 h-12 text-white" />
+                  </div>
+                  <h3 className="text-xl font-medium text-white mb-3">
+                    Welcome to your new chat!
+                  </h3>
+                  <p className="text-gray-400 mb-6 max-w-md text-center">
+                    I can help you create tasks, set goals, track habits, and more.
+                    Start by typing a message below.
+                  </p>
+                  <div className="grid grid-cols-2 gap-4 max-w-md w-full">
+                    <button
+                      onClick={() => setInput('Create a task for completing the project report')}
+                      className="bg-gray-800 p-3 rounded-lg border border-gray-700 text-left hover:bg-gray-700/50 transition-colors"
+                    >
+                      <span className="font-medium text-white">Create task</span>
+                      <p className="text-sm text-gray-400 mt-1">Complete project report</p>
+                    </button>
+                    <button
+                      onClick={() => setInput('Set a goal to read 20 books this year')}
+                      className="bg-gray-800 p-3 rounded-lg border border-gray-700 text-left hover:bg-gray-700/50 transition-colors"
+                    >
+                      <span className="font-medium text-white">Set goal</span>
+                      <p className="text-sm text-gray-400 mt-1">Read 20 books</p>
+                    </button>
+                    <button
+                      onClick={() => setInput('Help me start a daily meditation habit')}
+                      className="bg-gray-800 p-3 rounded-lg border border-gray-700 text-left hover:bg-gray-700/50 transition-colors"
+                    >
+                      <span className="font-medium text-white">Track habit</span>
+                      <p className="text-sm text-gray-400 mt-1">Daily meditation</p>
+                    </button>
+                    <button
+                      onClick={() => setInput('Help me journal about my day')}
+                      className="bg-gray-800 p-3 rounded-lg border border-gray-700 text-left hover:bg-gray-700/50 transition-colors"
+                    >
+                      <span className="font-medium text-white">Journal</span>
+                      <p className="text-sm text-gray-400 mt-1">Reflect on my day</p>
+                    </button>
+                  </div>
+                </div>
+              ) : (
+                currentChat.messages.map(message => (
+                  <MessageDisplay
+                    key={message.id}
+                    message={message}
+                    addTask={addTask}
+                    addGoal={addGoal}
+                    addHabit={addHabit}
+                    addJournalEntry={addJournalEntry}
+                    user={user}
+                    onSuggestionDecision={handleSuggestionDecision}
+                  />
+                ))
+              )}
+              <div ref={messagesEndRef} />
+            </div>
           ) : (
-            <div className="h-full flex items-center justify-center">
-              <div className="text-center">
-                <MessageSquare className="w-12 h-12 text-gray-400 mx-auto mb-4" />
-                <h3 className="text-lg font-medium text-gray-900 dark:text-white mb-2">
-                  Start a new chat
-                </h3>
-                <p className="text-gray-600 dark:text-gray-400">
-                  Begin a conversation with AI to manage your tasks, goals, and habits
-                </p>
-                <button
-                  onClick={createNewChat}
-                  className="mt-4 bg-purple-600 text-white px-4 py-2 rounded-md hover:bg-purple-700 flex items-center space-x-2 mx-auto"
-                >
-                  <Plus className="w-5 h-5" />
-                  <span>New Chat</span>
-                </button>
+            <div className="h-full flex flex-col items-center justify-center py-12">
+              <div className="bg-gradient-to-r from-purple-500 to-indigo-600 p-4 rounded-full mb-6">
+                <MessageSquare className="w-12 h-12 text-white" />
               </div>
+              <h3 className="text-xl font-medium text-white mb-3">
+                Welcome to AI Assistant
+              </h3>
+              <p className="text-gray-400 mb-6 max-w-md text-center">
+                I can help you manage your tasks, set goals, track habits, and more. 
+                Start a new chat to begin!
+              </p>
+              <button
+                onClick={createNewChat}
+                className="bg-gradient-to-r from-purple-600 to-indigo-700 text-white px-4 py-2 rounded-md hover:from-purple-700 hover:to-indigo-800 transition-colors inline-flex items-center space-x-2"
+              >
+                <Plus className="w-5 h-5" />
+                <span>Start New Chat</span>
+              </button>
             </div>
           )}
-          <div ref={messagesEndRef} />
         </div>
 
         {/* Input Area */}
         {currentChat && (
-          <div className="p-4 border-t dark:border-gray-700 flex-shrink-0">
-            <div className="flex space-x-4">
+          <div className="p-4 bg-gradient-to-r from-gray-800 to-gray-900 border-t border-gray-700 flex-shrink-0">
+            <form 
+              onSubmit={(e) => {
+                e.preventDefault()
+                handleSendMessage()
+              }}
+              className="flex space-x-4 max-w-4xl mx-auto"
+            >
               <input
+                ref={inputRef}
                 type="text"
                 value={input}
                 onChange={(e) => setInput(e.target.value)}
-                onKeyPress={(e) => e.key === 'Enter' && handleSendMessage()}
                 placeholder="Type your message..."
-                className="flex-1 px-4 py-2 border dark:border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500 dark:bg-gray-700 dark:text-white"
+                disabled={isLoading}
+                className="flex-1 px-4 py-2 border border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500 bg-gray-700 text-white disabled:opacity-50 disabled:cursor-not-allowed"
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter' && !e.shiftKey) {
+                    e.preventDefault()
+                    handleSendMessage()
+                  }
+                }}
               />
               <button
-                onClick={handleSendMessage}
+                type="submit"
                 disabled={isLoading || !input.trim()}
-                className="bg-purple-600 text-white px-4 py-2 rounded-lg hover:bg-purple-700 disabled:opacity-50 disabled:cursor-not-allowed flex items-center space-x-2"
+                className="bg-gradient-to-r from-purple-600 to-indigo-700 text-white px-4 py-2 rounded-lg hover:from-purple-700 hover:to-indigo-800 disabled:opacity-50 disabled:cursor-not-allowed transition-colors flex items-center justify-center w-12"
               >
                 {isLoading ? (
                   <Loader2 className="w-5 h-5 animate-spin" />
@@ -723,10 +1056,21 @@ export default function AIPlansPage() {
                   <Send className="w-5 h-5" />
                 )}
               </button>
-            </div>
+            </form>
+            <p className="text-xs text-gray-500 text-center mt-2">
+              AI Assistant can help with tasks, goals, habits, and more
+            </p>
           </div>
         )}
       </div>
+
+      {/* Mobile overlay when sidebar is open */}
+      {showRecentChats && (
+        <div
+          className="fixed inset-0 bg-black bg-opacity-70 z-20 md:hidden"
+          onClick={() => setShowRecentChats(false)}
+        />
+      )}
     </div>
   )
 }

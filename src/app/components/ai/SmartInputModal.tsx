@@ -149,7 +149,7 @@ export function SmartInputModal({
                         suggestion.priority
                       )}`}
                     >
-                      {suggestion.priority.charAt(0).toUpperCase() + suggestion.priority.slice(1)}
+                      {(suggestion.priority || '').charAt(0).toUpperCase() + (suggestion.priority || '').slice(1)}
                     </span>
                   </div>
                   <p className="text-sm text-gray-700 dark:text-gray-300 mb-2">
