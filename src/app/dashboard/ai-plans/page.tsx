@@ -186,9 +186,6 @@ const getIconForSuggestionType = (type: string) => {
 // Memoized MessageDisplay component
 const MessageDisplay = memo(({ 
   message, 
-  addTask, 
-  addGoal, 
-  addHabit, 
   addJournalEntry, 
   user, 
   onSuggestionDecision
