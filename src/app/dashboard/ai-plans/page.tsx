@@ -311,7 +311,7 @@ const MessageDisplay = memo(({
         className={`max-w-[80%] rounded-2xl p-4 ${
           message.role === 'user'
             ? 'bg-gradient-to-r from-purple-600 to-indigo-700 text-white'
-            : 'bg-gradient-to-r from-gray-800 to-gray-900 text-gray-100 border border-gray-700'
+            : 'bg-gray-100 text-gray-900 border border-gray-200 dark:bg-gradient-to-r dark:from-gray-800 dark:to-gray-900 dark:text-gray-100 dark:border dark:border-gray-700'
         }`}
       >
         {/* Loading state */}
@@ -325,7 +325,7 @@ const MessageDisplay = memo(({
           <>
             {/* Message content */}
             {(displayedContent || message.content) && (
-              <div className="prose prose-sm max-w-none mb-4 text-gray-100">
+              <div className="prose prose-sm max-w-none mb-4 text-gray-900 dark:text-gray-100">
                 {parseMessageContent(displayedContent || message.content)}
                 {isAnimating && <span className="inline-block w-2 h-4 bg-purple-400 animate-pulse ml-1" />}
               </div>
@@ -389,7 +389,7 @@ const MessageDisplay = memo(({
 
                       {/* Description */}
                       {suggestion.Description && (
-                        <p className="text-purple-100 text-base leading-relaxed mb-6 bg-white/5 p-4 rounded-xl backdrop-blur-sm">
+                        <p className="text-gray-700 text-base leading-relaxed mb-6 bg-gray-50 p-4 rounded-xl backdrop-blur-sm dark:text-purple-100 dark:bg-white/5">
                           {suggestion.Description}
                         </p>
                       )}
@@ -397,19 +397,19 @@ const MessageDisplay = memo(({
                       {/* Details Grid */}
                       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 mb-6">
                         {suggestion.DueDate && (
-                          <div className="flex items-center space-x-2 text-purple-200">
+                          <div className="flex items-center space-x-2 text-gray-600 dark:text-purple-200">
                             <Calendar className="w-4 h-4 text-purple-400" />
                             <span className="text-sm">Due: {new Date(suggestion.DueDate).toLocaleDateString()}</span>
                           </div>
                         )}
                         {suggestion.Frequency && (
-                          <div className="flex items-center space-x-2 text-purple-200">
+                          <div className="flex items-center space-x-2 text-gray-600 dark:text-purple-200">
                             <Clock className="w-4 h-4 text-purple-400" />
                             <span className="text-sm">Frequency: {suggestion.Frequency}</span>
                           </div>
                         )}
                         {suggestion.Progress !== undefined && (
-                          <div className="flex items-center space-x-2 text-purple-200">
+                          <div className="flex items-center space-x-2 text-gray-600 dark:text-purple-200">
                             <Target className="w-4 h-4 text-purple-400" />
                             <span className="text-sm">Progress: {suggestion.Progress}%</span>
                           </div>
@@ -804,15 +804,15 @@ export default function AIPlansPage() {
   }
 
   return (
-    <div className="h-full flex bg-gradient-to-br from-gray-900 to-gray-950">
+    <div className="h-full flex bg-gray-50 dark:bg-gradient-to-br dark:from-gray-900 dark:to-gray-950">
       {/* Sidebar */}
       <div
         className={`${
           showRecentChats ? 'translate-x-0' : '-translate-x-full'
-        } md:translate-x-0 fixed md:relative w-80 h-full bg-gradient-to-b from-gray-800 to-gray-900 border-r border-gray-700 transition-transform duration-300 flex flex-col z-30`}
+        } md:translate-x-0 fixed md:relative w-80 h-full bg-white border-r border-gray-200 transition-transform duration-300 flex flex-col z-30 dark:bg-gradient-to-b dark:from-gray-800 dark:to-gray-900 dark:border-gray-700`}
       >
         {/* Sidebar Header */}
-        <div className="p-4 border-b border-gray-700 flex-shrink-0">
+        <div className="p-4 border-b border-gray-200 flex-shrink-0 dark:border-gray-700">
           <button
             onClick={createNewChat}
             className="w-full bg-gradient-to-r from-purple-600 to-indigo-700 text-white px-4 py-2 rounded-lg hover:from-purple-700 hover:to-indigo-800 transition-all duration-300 flex items-center justify-center space-x-2 shadow-lg hover:shadow-purple-500/20"
@@ -825,7 +825,7 @@ export default function AIPlansPage() {
         {/* Chat List */}
         <div className="flex-1 overflow-y-auto">
           {chats.length === 0 ? (
-            <div className="p-4 text-center text-gray-400">
+            <div className="p-4 text-center text-gray-600 dark:text-gray-400">
               <p className="text-sm">No chats yet</p>
               <p className="text-xs mt-1">Start a new conversation</p>
             </div>
@@ -833,7 +833,7 @@ export default function AIPlansPage() {
             chats.map(chat => (
               <div
                 key={chat.id}
-                className={`p-4 border-b border-gray-700 cursor-pointer hover:bg-gray-800/50 transition-colors ${
+                className={`p-4 border-b border-gray-200 cursor-pointer hover:bg-gray-100 transition-colors dark:border-gray-700 dark:hover:bg-gray-800/50 ${
                   currentChat?.id === chat.id ? 'bg-gradient-to-r from-purple-900/30 to-indigo-900/30' : ''
                 }`}
                 onClick={() => selectChat(chat)}
@@ -852,15 +852,15 @@ export default function AIPlansPage() {
                           }
                         }}
                         onClick={(e) => e.stopPropagation()}
-                        className="w-full px-2 py-1 bg-gray-700 border border-gray-600 rounded text-sm text-white"
+                        className="w-full px-2 py-1 bg-gray-100 border border-gray-300 rounded text-sm text-gray-900 dark:bg-gray-700 dark:border-gray-600 dark:text-white"
                         autoFocus
                       />
                     ) : (
-                      <h3 className="text-sm font-medium truncate text-white">
+                      <h3 className="text-sm font-medium truncate text-gray-900 dark:text-white">
                         {chat.title}
                       </h3>
                     )}
-                    <p className="text-xs text-gray-400 mt-1">
+                    <p className="text-xs text-gray-500 mt-1 dark:text-gray-400">
                       {new Date(chat.updatedAt).toLocaleDateString()}
                     </p>
                   </div>
@@ -868,15 +868,15 @@ export default function AIPlansPage() {
                   <Popover>
                     <PopoverTrigger asChild>
                       <button
-                        className="p-1 rounded hover:bg-gray-700"
+                        className="p-1 rounded hover:bg-gray-100 dark:hover:bg-gray-700"
                         onClick={(e) => e.stopPropagation()}
                       >
                         <MoreVertical className="w-4 h-4 text-gray-400" />
                       </button>
                     </PopoverTrigger>
-                    <PopoverContent className="w-32 p-1 bg-gray-800 border border-gray-700">
+                    <PopoverContent className="w-32 p-1 bg-white border border-gray-200 dark:bg-gray-800 dark:border-gray-700">
                       <button
-                        className="w-full text-left px-3 py-2 text-sm hover:bg-gray-700 rounded flex items-center text-gray-200"
+                        className="w-full text-left px-3 py-2 text-sm hover:bg-gray-100 rounded flex items-center text-gray-700 dark:hover:bg-gray-700 dark:text-gray-200"
                         onClick={(e) => {
                           e.stopPropagation()
                           setEditingChatId(chat.id)
@@ -908,15 +908,15 @@ export default function AIPlansPage() {
       {/* Main Chat Area */}
       <div className="flex-1 flex flex-col h-full">
         {/* Chat Header */}
-        <div className="p-4 bg-gradient-to-r from-gray-800 to-gray-900 border-b border-gray-700 flex items-center justify-between flex-shrink-0">
+        <div className="p-4 bg-white border-b border-gray-200 flex items-center justify-between flex-shrink-0 dark:bg-gradient-to-r dark:from-gray-800 dark:to-gray-900 dark:border-gray-700">
           <button
             onClick={() => setShowRecentChats(!showRecentChats)}
-            className="md:hidden p-2 hover:bg-gray-700 rounded-md"
+            className="md:hidden p-2 hover:bg-gray-100 rounded-md dark:hover:bg-gray-700"
           >
-            <MessageSquare className="w-5 h-5 text-gray-300" />
+            <MessageSquare className="w-5 h-5 text-gray-700 dark:text-gray-300" />
           </button>
           
-          <h1 className="text-xl font-semibold text-white">
+          <h1 className="text-xl font-semibold text-gray-900 dark:text-white">
             {currentChat?.title || 'AI Assistant'}
           </h1>
           
@@ -932,7 +932,7 @@ export default function AIPlansPage() {
         </div>
 
         {/* Messages Area */}
-        <div className="flex-1 overflow-y-auto p-4 bg-gradient-to-b from-gray-900 to-gray-950">
+        <div className="flex-1 overflow-y-auto p-4 bg-gray-50 dark:bg-gradient-to-b dark:from-gray-900 dark:to-gray-950">
           {currentChat ? (
             <div className="max-w-4xl mx-auto">
               {currentChat.messages.length === 0 ? (
@@ -940,41 +940,41 @@ export default function AIPlansPage() {
                   <div className="bg-gradient-to-r from-purple-500 to-indigo-600 p-4 rounded-full mb-6">
                     <MessageSquare className="w-12 h-12 text-white" />
                   </div>
-                  <h3 className="text-xl font-medium text-white mb-3">
+                  <h3 className="text-xl font-medium text-gray-900 dark:text-white">
                     Welcome to your new chat!
                   </h3>
-                  <p className="text-gray-400 mb-6 max-w-md text-center">
+                  <p className="text-gray-600 mb-6 max-w-md text-center dark:text-gray-400">
                     I can help you create tasks, set goals, track habits, and more.
                     Start by typing a message below.
                   </p>
                   <div className="grid grid-cols-2 gap-4 max-w-md w-full">
                     <button
                       onClick={() => setInput('Create a task for completing the project report')}
-                      className="bg-gray-800 p-3 rounded-lg border border-gray-700 text-left hover:bg-gray-700/50 transition-colors"
+                      className="bg-white p-3 rounded-lg border border-gray-200 text-left hover:bg-gray-100 transition-colors dark:bg-gray-800 dark:border-gray-700 dark:hover:bg-gray-700/50"
                     >
-                      <span className="font-medium text-white">Create task</span>
-                      <p className="text-sm text-gray-400 mt-1">Complete project report</p>
+                      <span className="font-medium text-gray-900 dark:text-white">Create task</span>
+                      <p className="text-sm text-gray-500 mt-1 dark:text-gray-400">Complete project report</p>
                     </button>
                     <button
                       onClick={() => setInput('Set a goal to read 20 books this year')}
-                      className="bg-gray-800 p-3 rounded-lg border border-gray-700 text-left hover:bg-gray-700/50 transition-colors"
+                      className="bg-white p-3 rounded-lg border border-gray-200 text-left hover:bg-gray-100 transition-colors dark:bg-gray-800 dark:border-gray-700 dark:hover:bg-gray-700/50"
                     >
-                      <span className="font-medium text-white">Set goal</span>
-                      <p className="text-sm text-gray-400 mt-1">Read 20 books</p>
+                      <span className="font-medium text-gray-900 dark:text-white">Set goal</span>
+                      <p className="text-sm text-gray-500 mt-1 dark:text-gray-400">Read 20 books</p>
                     </button>
                     <button
                       onClick={() => setInput('Help me start a daily meditation habit')}
-                      className="bg-gray-800 p-3 rounded-lg border border-gray-700 text-left hover:bg-gray-700/50 transition-colors"
+                      className="bg-white p-3 rounded-lg border border-gray-200 text-left hover:bg-gray-100 transition-colors dark:bg-gray-800 dark:border-gray-700 dark:hover:bg-gray-700/50"
                     >
-                      <span className="font-medium text-white">Track habit</span>
-                      <p className="text-sm text-gray-400 mt-1">Daily meditation</p>
+                      <span className="font-medium text-gray-900 dark:text-white">Track habit</span>
+                      <p className="text-sm text-gray-500 mt-1 dark:text-gray-400">Daily meditation</p>
                     </button>
                     <button
                       onClick={() => setInput('Help me journal about my day')}
-                      className="bg-gray-800 p-3 rounded-lg border border-gray-700 text-left hover:bg-gray-700/50 transition-colors"
+                      className="bg-white p-3 rounded-lg border border-gray-200 text-left hover:bg-gray-100 transition-colors dark:bg-gray-800 dark:border-gray-700 dark:hover:bg-gray-700/50"
                     >
-                      <span className="font-medium text-white">Journal</span>
-                      <p className="text-sm text-gray-400 mt-1">Reflect on my day</p>
+                      <span className="font-medium text-gray-900 dark:text-white">Journal</span>
+                      <p className="text-sm text-gray-500 mt-1 dark:text-gray-400">Reflect on my day</p>
                     </button>
                   </div>
                 </div>
@@ -999,10 +999,10 @@ export default function AIPlansPage() {
               <div className="bg-gradient-to-r from-purple-500 to-indigo-600 p-4 rounded-full mb-6">
                 <MessageSquare className="w-12 h-12 text-white" />
               </div>
-              <h3 className="text-xl font-medium text-white mb-3">
+              <h3 className="text-xl font-medium text-gray-900 dark:text-white">
                 Welcome to AI Assistant
               </h3>
-              <p className="text-gray-400 mb-6 max-w-md text-center">
+              <p className="text-gray-600 mb-6 max-w-md text-center dark:text-gray-400">
                 I can help you manage your tasks, set goals, track habits, and more. 
                 Start a new chat to begin!
               </p>
@@ -1019,7 +1019,7 @@ export default function AIPlansPage() {
 
         {/* Input Area */}
         {currentChat && (
-          <div className="p-4 bg-gradient-to-r from-gray-800 to-gray-900 border-t border-gray-700 flex-shrink-0">
+          <div className="p-4 bg-white border-t border-gray-200 flex-shrink-0 dark:bg-gradient-to-r dark:from-gray-800 dark:to-gray-900 dark:border-gray-700">
             <form 
               onSubmit={(e) => {
                 e.preventDefault()
@@ -1034,7 +1034,7 @@ export default function AIPlansPage() {
                 onChange={(e) => setInput(e.target.value)}
                 placeholder="Type your message..."
                 disabled={isLoading}
-                className="flex-1 px-4 py-2 border border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500 bg-gray-700 text-white disabled:opacity-50 disabled:cursor-not-allowed"
+                className="flex-1 px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500 bg-gray-50 text-gray-900 disabled:opacity-50 disabled:cursor-not-allowed dark:border-gray-600 dark:bg-gray-700 dark:text-white"
                 onKeyDown={(e) => {
                   if (e.key === 'Enter' && !e.shiftKey) {
                     e.preventDefault()
