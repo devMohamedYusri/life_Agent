@@ -1,4 +1,3 @@
-//app/api/chat/route.ts
 import { models } from '@//models';
 import { NextResponse } from 'next/server';
 import { Task, Goal, Habit, JournalEntry } from '../../lib/export';
@@ -20,31 +19,56 @@ interface ChatContext {
 }
 
 async function tryModel(model: string, message: string, context: ChatContext,) {
+    // Updated system prompt with multi-item handling instructions
+    const systemPrompt = `Updated AI Personal Assistant System Prompt
+You are an AI Personal Assistant that functions as a backend service. Your primary role is to immediately create tasks, goals, habits, and journal entries upon user request.
+
+CRITICAL MULTI-ITEM HANDLING RULES:
+1. When creating multiple items (e.g., "add these three tasks"), output ALL items as a JSON ARRAY
+2. NEVER split a single item across messages - each suggestion must be complete
+3. If you can't send all items at once, send COMPLETE items first and indicate more will follow
+4. When sending partial responses, include ONLY FULLY COMPLETE items
+
+Item creation structure:
+1. Conversational Commentary: Friendly message about the items
+2. Structured Data Block: JSON inside ############ delimiters
+
+JSON OUTPUT RULES:
+- Use EXACT PascalCase keys
+- ALWAYS include "type" ("habit", "goal", "task", "journal")
+- ALWAYS include "decision" ("null")
+- For multiple items: OUTPUT AS JSON ARRAY
+- For single item: OUTPUT AS SINGLE JSON OBJECT
+- use exact camelCase for keys
+-CRITICAL DATE FORMATTING RULES:
+1. ALL dates MUST be formatted in ISO 8601 with timezone: "YYYY-MM-DDTHH:mm:ss+00:00"
+2. Examples of valid formats:
+   - "2025-06-20T08:04:00+00:00" (correct)
+   - "2025-06-20" (incorrect - missing time and timezone)
+   - "June 20, 2025" (incorrect - wrong format)
+3. This applies to ALL date fields including:
+   - DueDate
+   - Deadline
+   - ReminderTime
+   - EntryDate
+   - Any other date/time fields
+-follow the same format for the recent tasks ,goals ,habits ,journal entries 
+EXAMPLE MULTI-ITEM OUTPUT:
+############
+[
+  {
+  },
+  {
+  }
+]
+############
+`;
+
     // Prepare messages array with system message and chat history
     const messages = [
         {
             role: "system",
-            content: `Updated AI Personal Assistant System Prompt
-You are an AI Personal Assistant that functions as a backend service. Your primary role is to immediately create tasks, goals, habits, and journal entries upon user request.
-
-While users can send normal conversational messages that don't require creating items, the typical and expected use case is for users to request the creation of tasks, goals, habits, or journal entries. 
-
-When the user's intent is to create an item, you MUST act immediately and strictly follow this two-part structure:
-
-1. Conversational Commentary: A friendly, helpful message that comments on the item you have just created or without needing to add an item.
-
-2. Structured Data Block: Immediately after the commentary, you MUST provide the data inside a block that starts with ############ on a new line and ends with ############ on a new line.
-
-Crucial Rule: Do NOT ask for permission or confirmation (e.g., "Would you like me to create this?"). If the user asks you to create something, assume they want it created and generate the JSON block immediately.
-
-If the user's request is ambiguous, use your best judgment to create the most likely item they want. You can mention any assumptions you made in the conversational commentary.
-
-You MUST use the following JSON schemas with the exact PascalCase keys shown below. Do NOT use bullet points or markdown for the data block. The user's application relies on parsing this exact JSON format.
-
-IMPORTANT: Every JSON response MUST include a "Type" field with one of these exact values: "habit", "goal", "task", or "journal"
-and Every JSON response MUST include a "Decision" field  with one of these exact valus : "null"
-all the suggestions should be in small case letters 
-. This field is required for the application to properly categorize and process the response.`
+            content: systemPrompt
         }
     ];
 
@@ -57,9 +81,10 @@ all the suggestions should be in small case letters
     messages.push({
         role: "user",
         content: `Context:
-Recent Tasks: ${JSON.stringify(context?.recentTasks?.slice(0, 3) || [])}
-Recent Goals: ${JSON.stringify(context?.recentGoals?.slice(0, 3) || [])}
-Recent Habits: ${JSON.stringify(context?.recentHabits?.slice(0, 3) || [])}
+Recent Tasks: ${JSON.stringify(context?.recentTasks?.slice(0, 10) || [])}
+Recent Goals: ${JSON.stringify(context?.recentGoals?.slice(0, 10) || [])}
+Recent Habits: ${JSON.stringify(context?.recentHabits?.slice(0, 10) || [])}
+Recent Journal Entries: ${JSON.stringify(context?.recentJournalEntries?.slice(0, 10) || [])}
 
 User Message: ${message}`
     });
@@ -98,7 +123,7 @@ User Message: ${message}`
     const content = data.choices[0]?.message?.content || '';
     console.log("data is : ",data,"\ncontent : ",content)
     // Extract JSON block
-    let jsonData = null;
+    let suggestions = [];
     let conversationalContent = content;
     
     // Regex to find content between ############ delimiters
@@ -122,17 +147,13 @@ User Message: ${message}`
             // Attempt to fix unquoted keys (e.g., {key: "value"} -> {"key": "value"})
             pureJson = pureJson.replace(/(\b[A-Z][a-zA-Z0-9_]*\b)\s*:/g, '"$1":');
 
-            jsonData = JSON.parse(pureJson);
-            console.log('json returned : ',pureJson)
+            // Parse and normalize to array
+            const parsed = JSON.parse(pureJson);
+            suggestions = Array.isArray(parsed) ? parsed : [parsed];
+            console.log('JSON returned:', suggestions);
         } catch (e) {
             console.error('JSON parsing error:', e);
         }
-    }
-
-    // Convert to suggestions array
-    let suggestions = [];
-    if (jsonData) {
-        suggestions = Array.isArray(jsonData) ? jsonData : [jsonData];
     }
 
     return {

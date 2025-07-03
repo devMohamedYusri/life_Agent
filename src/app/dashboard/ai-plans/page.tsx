@@ -30,29 +30,30 @@ import { v4 as uuidv4 } from 'uuid'
 import { useAIAgent } from '../../lib/hooks/useAIAgent'
 import { toast } from 'react-hot-toast'
 import { Popover, PopoverContent, PopoverTrigger } from '../../components/ui/popover'
-import { Database } from '../../types/supabase'
+import { journalService } from '../../lib/database/journal'
 
 interface Suggestion {
-  Id: string
-  Type: 'task' | 'goal' | 'habit' | 'journal'
-  Title: string
-  Description?: string
-  Priority?: 'low' | 'medium' | 'high' | 'urgent'
-  DueDate?: string
-  Frequency?: 'daily' | 'weekly' | 'monthly'
-  TargetCount?: number
-  Status?: string
-  Progress?: number
-  Deadline?: string
-  ReminderTime?: string
-  Streak?: number
-  EntryDate?: string
-  Mood?: string
-  Tags?: string[]
-  Category?: string
-  Goal?: string
-  GoalType?: string
-  Decision?: 'accepted' | 'rejected' | null
+  id: string
+  type: 'task' | 'goal' | 'habit' | 'journal'
+  title: string
+  description?: string
+  priority?: 'low' | 'medium' | 'high' | 'urgent'
+  dueDate?: string
+  frequency?: 'daily' | 'weekly' | 'monthly'
+  targetCount?: number
+  status?: string
+  progress?: number
+  deadline?: string
+  reminderTime?: string
+  streak?: number
+  entryDate?: string
+  mood?: string
+  tags?: string[]
+  category?: string
+  goal?: string
+  goalType?: string
+  decision?: 'accepted' | 'rejected' | null,
+  content?:string
 }
 
 interface Message {
@@ -234,69 +235,68 @@ const MessageDisplay = memo(({
   }, [message.content, message.animate, message.role])
 
   const handleAcceptSuggestion = useCallback(async (suggestion: Suggestion) => {
-    if (!user || isProcessing[suggestion.Id]) return
+    if (!user || isProcessing[suggestion.id]) return
     
-    setIsProcessing(prev => ({ ...prev, [suggestion.Id]: true }))
+    setIsProcessing(prev => ({ ...prev, [suggestion.id]: true }))
     
     try {
-      switch (suggestion.Type) {
+      switch (suggestion.type) {
         case 'task':
           await taskService.createTask({
             user_id: user.id,
-            title: suggestion.Title,
-            description: suggestion.Description,
-            priority: suggestion.Priority || 'medium',
-            due_date: suggestion.DueDate ? new Date(suggestion.DueDate).toISOString() : null,
-            status: (taskStatuses.includes(suggestion.Status as TaskStatusType) 
-                      ? suggestion.Status : 'pending') as TaskStatusType
+            title: suggestion.title,
+            description: suggestion.description,
+            priority: suggestion.priority || 'medium',
+            due_date: suggestion.dueDate ? new Date(suggestion.dueDate).toISOString() : null,
+            status: (taskStatuses.includes(suggestion.status as TaskStatusType) 
+                      ? suggestion.status : 'pending') as TaskStatusType
           })
           break
         case 'goal':
-          const goalType = (goalTypes.includes(suggestion.GoalType as GoalTypeType) 
-                            ? suggestion.GoalType : 'short-term') as GoalTypeType;
-          const goalStatus = (goalStatuses.includes(suggestion.Status as GoalStatusType) 
-                              ? suggestion.Status : 'active') as GoalStatusType;
+          const goalType = (goalTypes.includes(suggestion.goalType as GoalTypeType) 
+                            ? suggestion.goalType : 'short-term') as GoalTypeType;
+          const goalStatus = (goalStatuses.includes(suggestion.status as GoalStatusType) 
+                              ? suggestion.status : 'active') as GoalStatusType;
 
           await goalService.createGoal({
             user_id: user.id,
-            title: suggestion.Title,
-            description: suggestion.Description || '',
-            priority: suggestion.Priority || 'medium',
+            title: suggestion.title,
+            description: suggestion.description || '',
+            priority: suggestion.priority || 'medium',
             goal_type: goalType,
             status: goalStatus,
-            deadline: suggestion.Deadline ? new Date(suggestion.Deadline).toISOString() : null,
-            progress: suggestion.Progress || 0
+            deadline: suggestion.deadline ? new Date(suggestion.deadline).toISOString() : null,
+            progress: suggestion.progress || 0
           })
           break
         case 'habit':
           await habitService.createHabit({
             user_id: user.id,
-            title: suggestion.Title,
-            description: suggestion.Description || '',
-            frequency: suggestion.Frequency || 'daily',
-            target_count: suggestion.TargetCount || 1,
-            reminder_time: suggestion.ReminderTime || null
+            title: suggestion.title,
+            description: suggestion.description || '',
+            frequency: suggestion.frequency || 'daily',
+            target_count: suggestion.targetCount || 1,
+            reminder_time: suggestion.reminderTime ? new Date(suggestion.reminderTime).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false }) : null
           })
           break
         case 'journal':
-          const journalEntryToInsert: Database['public']['Tables']['journal_entries']['Insert'] = {
+          await journalService.createJournalEntry({
             user_id: user.id,
-            content: suggestion.Description || '',
-            mood: (['neutral', 'positive', 'negative'].includes(suggestion.Mood as string) ? suggestion.Mood : null) as string | null,
-            tags: suggestion.Tags || null,
-            entry_date: suggestion.EntryDate ? new Date(suggestion.EntryDate).toISOString() : new Date().toISOString()
-          };
-          await addJournalEntry(journalEntryToInsert);
+            content: suggestion.content || '',
+            mood: (['neutral', 'positive', 'negative'].includes(suggestion.mood as string) ? suggestion.mood : null) as string | null,
+            tags: suggestion.tags || null,
+            entry_date: suggestion.entryDate || null // Pass it directly or null, service will format/default
+          });
           break
       }
       
-      toast.success(`${(suggestion.Type || 'item').charAt(0).toUpperCase() + (suggestion.Type || 'item').slice(1)} added successfully!`)
-      onSuggestionDecision(message.id, suggestion.Id, 'accepted')
+      toast.success(`${(suggestion.type || 'item').charAt(0).toUpperCase() + (suggestion.type || 'item').slice(1)} added successfully!`)
+      onSuggestionDecision(message.id, suggestion.id, 'accepted')
     } catch (error) {
       console.error('Error adding suggestion:', error)
       toast.error('Failed to add suggestion. Please try again.')
     } finally {
-      setIsProcessing(prev => ({ ...prev, [suggestion.Id]: false }))
+      setIsProcessing(prev => ({ ...prev, [suggestion.id]: false }))
     }
   }, [user, isProcessing, addJournalEntry, onSuggestionDecision, message.id])
 
@@ -337,33 +337,33 @@ const MessageDisplay = memo(({
                 <p className="text-sm font-semibold text-purple-300 mb-2">Suggestions:</p>
                 {message.suggestions.map((suggestion) => (
                   <div
-                    key={suggestion.Id}
-                    className="group relative overflow-hidden rounded-3xl backdrop-blur-xl bg-white/10 border border-white/20 shadow-2xl hover:shadow-purple-500/25 transition-all duration-500 hover:scale-[1.02] hover:bg-white/15"
+                    key={suggestion.id}
+                    className="group relative overflow-hidden rounded-xl bg-white shadow-lg border border-gray-200 dark:bg-gray-800 dark:border-gray-700 hover:shadow-xl hover:shadow-md transition-all duration-300 hover:scale-[1.02]"
                   >
                     {/* Gradient Border Animation */}
-                    <div className="absolute inset-0 rounded-3xl bg-gradient-to-r from-purple-500/20 via-pink-500/20 to-cyan-500/20 opacity-0 group-hover:opacity-100 transition-opacity duration-500" />
+                    <div className="absolute inset-0 rounded-xl bg-gradient-to-r from-purple-500/20 via-pink-500/20 to-cyan-500/20 opacity-0 group-hover:opacity-20 transition-opacity duration-500" />
                     
                     {/* Priority Strip */}
-                    <div className={`absolute top-0 left-0 right-0 h-1 bg-gradient-to-r ${getPriorityColor(suggestion.Priority)}`} />
+                    <div className={`absolute top-0 left-0 right-0 h-1 bg-gradient-to-r ${getPriorityColor(suggestion.priority)}`} />
                     
                     <div className="relative p-6">
                       {/* Header Section */}
                       <div className="flex items-start justify-between mb-6">
                         <div className="flex items-center space-x-3">
-                          <div className="p-3 bg-gradient-to-r from-purple-500/20 to-pink-500/20 rounded-2xl backdrop-blur-sm">
-                            {getIconForSuggestionType(suggestion.Type)}
+                          <div className="p-3 bg-gradient-to-r from-purple-500/20 to-pink-500/20 rounded-lg backdrop-blur-sm">
+                            {getIconForSuggestionType(suggestion.type)}
                           </div>
                           <div>
-                            <h3 className="text-xl font-bold text-white mb-1 group-hover:text-purple-300 transition-colors">
-                              {suggestion.Title || 'Untitled suggestion'}
+                            <h3 className="text-xl font-bold text-gray-900 mb-1 group-hover:text-purple-700 dark:text-white dark:group-hover:text-purple-300 transition-colors">
+                              {suggestion.title || 'Untitled suggestion'}
                             </h3>
                             <div className="flex items-center space-x-2">
-                              <span className="text-sm text-purple-300 font-medium">
-                                { (suggestion.Type || '').charAt(0).toUpperCase() + (suggestion.Type || '').slice(1) }
+                              <span className="text-sm text-gray-600 font-medium dark:text-purple-300">
+                                { (suggestion.type || '').charAt(0).toUpperCase() + (suggestion.type || '').slice(1) }
                               </span>
-                              {suggestion.Priority && (
-                                <span className={`px-3 py-1 rounded-full text-xs font-bold text-white bg-gradient-to-r ${getPriorityColor(suggestion.Priority)}`}>
-                                  {suggestion.Priority.toUpperCase()}
+                              {suggestion.priority && (
+                                <span className={`px-3 py-1 rounded-full text-xs font-bold text-white bg-gradient-to-r ${getPriorityColor(suggestion.priority)}`}>
+                                  {suggestion.priority.toUpperCase()}
                                 </span>
                               )}
                             </div>
@@ -372,13 +372,13 @@ const MessageDisplay = memo(({
 
                         {/* Status Badge */}
                         <div className="flex items-center space-x-2">
-                          {suggestion.Decision === 'accepted' && (
+                          {suggestion.decision === 'accepted' && (
                             <div className="flex items-center space-x-2 px-4 py-2 bg-gradient-to-r from-green-500/20 to-emerald-500/20 rounded-full border border-green-500/30 backdrop-blur-sm">
                               <CheckCircle className="w-4 h-4 text-green-400" />
                               <span className="text-green-300 text-sm font-medium">Accepted</span>
                             </div>
                           )}
-                          {suggestion.Decision === 'rejected' && (
+                          {suggestion.decision === 'rejected' && (
                             <div className="flex items-center space-x-2 px-4 py-2 bg-gradient-to-r from-red-500/20 to-pink-500/20 rounded-full border border-red-500/30 backdrop-blur-sm">
                               <XCircle className="w-4 h-4 text-red-400" />
                               <span className="text-red-300 text-sm font-medium">Rejected</span>
@@ -388,57 +388,57 @@ const MessageDisplay = memo(({
                       </div>
 
                       {/* Description */}
-                      {suggestion.Description && (
-                        <p className="text-gray-700 text-base leading-relaxed mb-6 bg-gray-50 p-4 rounded-xl backdrop-blur-sm dark:text-purple-100 dark:bg-white/5">
-                          {suggestion.Description}
+                      {(suggestion.description || suggestion.content) && (
+                        <p className="text-gray-700 text-base leading-relaxed mb-6 bg-gray-100 p-4 rounded-lg dark:text-gray-300 dark:bg-gray-700">
+                          {suggestion.type === 'journal' ? suggestion.content : suggestion.description}
                         </p>
                       )}
 
                       {/* Details Grid */}
                       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 mb-6">
-                        {suggestion.DueDate && (
-                          <div className="flex items-center space-x-2 text-gray-600 dark:text-purple-200">
+                        {suggestion.dueDate && (
+                          <div className="flex items-center space-x-2 text-gray-600 dark:text-gray-300">
                             <Calendar className="w-4 h-4 text-purple-400" />
-                            <span className="text-sm">Due: {new Date(suggestion.DueDate).toLocaleDateString()}</span>
+                            <span className="text-sm">Due: {new Date(suggestion.dueDate).toLocaleDateString()}</span>
                           </div>
                         )}
-                        {suggestion.Frequency && (
-                          <div className="flex items-center space-x-2 text-gray-600 dark:text-purple-200">
+                        {suggestion.frequency && (
+                          <div className="flex items-center space-x-2 text-gray-600 dark:text-gray-300">
                             <Clock className="w-4 h-4 text-purple-400" />
-                            <span className="text-sm">Frequency: {suggestion.Frequency}</span>
+                            <span className="text-sm">Frequency: {suggestion.frequency}</span>
                           </div>
                         )}
-                        {suggestion.Progress !== undefined && (
-                          <div className="flex items-center space-x-2 text-gray-600 dark:text-purple-200">
+                        {suggestion.progress !== undefined && (
+                          <div className="flex items-center space-x-2 text-gray-600 dark:text-gray-300">
                             <Target className="w-4 h-4 text-purple-400" />
-                            <span className="text-sm">Progress: {suggestion.Progress}%</span>
+                            <span className="text-sm">Progress: {suggestion.progress}%</span>
                           </div>
                         )}
                       </div>
 
                       {/* Progress Bar */}
-                      {suggestion.Progress !== undefined && (
+                      {suggestion.progress !== undefined && (
                         <div className="mb-6">
                           <div className="flex justify-between items-center mb-2">
-                            <span className="text-sm text-purple-300">Progress</span>
-                            <span className="text-sm text-purple-300 font-bold">{suggestion.Progress}%</span>
+                            <span className="text-sm text-gray-600 dark:text-gray-300">Progress</span>
+                            <span className="text-sm text-gray-600 font-bold dark:text-gray-300">{suggestion.progress}%</span>
                           </div>
-                          <div className="w-full bg-white/10 rounded-full h-2 backdrop-blur-sm">
+                          <div className="w-full bg-gray-200 rounded-full h-2 dark:bg-gray-700">
                             <div 
                               className="bg-gradient-to-r from-purple-500 to-pink-500 h-2 rounded-full transition-all duration-1000 ease-out shadow-lg"
-                              style={{ width: `${suggestion.Progress}%` }}
+                              style={{ width: `${suggestion.progress}%` }}
                             />
                           </div>
                         </div>
                       )}
 
                       {/* Tags */}
-                      {suggestion.Tags && suggestion.Tags.length > 0 && (
+                      {suggestion.tags && suggestion.tags.length > 0 && (
                         <div className="flex flex-wrap gap-2 mb-6">
-                          {suggestion.Tags.map((tag, index) => (
+                          {suggestion.tags.map((tag, index) => (
                             <span
                               key={index}
-                              className="inline-flex items-center space-x-1 px-3 py-1 bg-gradient-to-r from-purple-500/20 to-pink-500/20 rounded-full text-xs text-purple-200 border border-purple-500/30 backdrop-blur-sm hover:bg-purple-500/30 transition-colors"
+                              className="inline-flex items-center space-x-1 px-3 py-1 bg-gray-100 rounded-full text-xs text-gray-700 border border-gray-200 dark:bg-gray-700 dark:text-gray-200 dark:border-gray-600"
                             >
                               <Tag className="w-3 h-3" />
                               <span>{tag}</span>
@@ -448,14 +448,14 @@ const MessageDisplay = memo(({
                       )}
 
                       {/* Action Buttons */}
-                      {suggestion.Decision === null && (
+                      {suggestion.decision === null && (
                         <div className="flex justify-end space-x-3">
                           <button
-                            onClick={() => handleRejectSuggestion(suggestion.Id)}
-                            disabled={isProcessing[suggestion.Id]}
-                            className="px-6 py-3 bg-gradient-to-r from-red-500/20 to-pink-500/20 border border-red-500/30 text-red-300 rounded-2xl font-medium hover:from-red-500/30 hover:to-pink-500/30 hover:border-red-500/50 transition-all duration-300 backdrop-blur-sm hover:scale-105 disabled:opacity-50 disabled:cursor-not-allowed"
+                            onClick={() => handleRejectSuggestion(suggestion.id)}
+                            disabled={isProcessing[suggestion.id]}
+                            className="px-6 py-3 bg-gray-100 border border-gray-300 text-gray-700 rounded-lg font-medium hover:bg-gray-200 transition-all duration-300 disabled:opacity-50 disabled:cursor-not-allowed dark:bg-gray-700 dark:border-gray-600 dark:text-gray-200 dark:hover:bg-gray-600"
                           >
-                            {isProcessing[suggestion.Id] ? (
+                            {isProcessing[suggestion.id] ? (
                               <div className="flex items-center space-x-2">
                                 <div className="w-4 h-4 border-2 border-red-400 border-t-transparent rounded-full animate-spin" />
                                 <span>Processing...</span>
@@ -469,10 +469,10 @@ const MessageDisplay = memo(({
                           </button>
                           <button
                             onClick={() => handleAcceptSuggestion(suggestion)}
-                            disabled={isProcessing[suggestion.Id]}
-                            className="px-6 py-3 bg-gradient-to-r from-purple-500 to-pink-500 text-white rounded-2xl font-medium hover:from-purple-600 hover:to-pink-600 transition-all duration-300 shadow-lg hover:shadow-purple-500/25 hover:scale-105 disabled:opacity-50 disabled:cursor-not-allowed"
+                            disabled={isProcessing[suggestion.id]}
+                            className="px-6 py-3 bg-gradient-to-r from-purple-600 to-indigo-700 text-white rounded-lg font-medium hover:from-purple-700 hover:to-indigo-800 transition-all duration-300 shadow-lg disabled:opacity-50 disabled:cursor-not-allowed"
                           >
-                            {isProcessing[suggestion.Id] ? (
+                            {isProcessing[suggestion.id] ? (
                               <div className="flex items-center space-x-2">
                                 <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
                                 <span>Processing...</span>
@@ -489,7 +489,7 @@ const MessageDisplay = memo(({
                     </div>
 
                     {/* Floating Particles Effect */}
-                    <div className="absolute inset-0 pointer-events-none overflow-hidden rounded-3xl">
+                    <div className="absolute inset-0 pointer-events-none overflow-hidden rounded-xl">
                       <div className="absolute -top-2 -right-2 w-4 h-4 bg-purple-500/30 rounded-full animate-pulse" />
                       <div className="absolute top-1/2 -left-1 w-2 h-2 bg-pink-500/40 rounded-full animate-ping" />
                       <div className="absolute -bottom-1 left-1/3 w-3 h-3 bg-cyan-500/30 rounded-full animate-bounce" />
@@ -535,9 +535,9 @@ export default function AIPlansPage() {
               ...msg,
               timestamp: new Date(msg.timestamp),
               suggestions: msg.suggestions?.map(s => ({
-                ...s,
-                Id: s.Id || uuidv4(),
-                Title: s.Title || 'Untitled suggestion'
+                ...s, 
+                id: s.id || uuidv4(),
+                title: s.title || 'Untitled suggestion'
               }))
             }))
           })))
@@ -624,8 +624,8 @@ export default function AIPlansPage() {
     const updatedMessages = currentChat.messages.map(message => {
       if (message.id === messageId && message.suggestions) {
         const updatedSuggestions = message.suggestions.map(suggestion => {
-          if (suggestion.Id === suggestionId) {
-            return { ...suggestion, Decision: decision }
+          if (suggestion.id === suggestionId) {
+            return { ...suggestion, decision: decision }
           }
           return suggestion
         })
@@ -719,14 +719,14 @@ export default function AIPlansPage() {
         recentMessages
       })
 
-      // Add IDs and ensure titles exist for suggestions
+      // CORRECTED: Map suggestions with proper PascalCase fields
       const suggestionsWithIds = (aiResponse.suggestions || []).map(s => ({
         ...s,
-        Id: uuidv4(),
-        Title: s.title || 'Untitled suggestion',
-        Description: s.description || '',
-        Decision: null,
-        Type: s.type,
+        id: uuidv4(),
+        title: s.title || 'Untitled suggestion',
+        description: s.description || '',
+        decision: null,
+        type: s.type,
       }))
 
       // Update temp message with actual response
