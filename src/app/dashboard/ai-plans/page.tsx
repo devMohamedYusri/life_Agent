@@ -744,7 +744,7 @@ export default function AIPlansPage() {
                 goal_id: suggestion.relatedGoalId || null,
               });
               break;
-              /*eslint-enable*/
+              /*eslint-disable*/
             case 'habit':
               let habitStatus: 'active' | 'paused' | 'completed' = 'active';
               switch (suggestion.status) {
@@ -764,7 +764,7 @@ export default function AIPlansPage() {
                   habitStatus = 'active';
               }
 
-              /*eslint-disable*/
+              /*eslint-enable*/
 
               response = await habitService(supabase).createHabit({
                 user_id: user.id,
