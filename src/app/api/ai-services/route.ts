@@ -547,20 +547,20 @@ ${entries?.map(entry => `- Date: ${new Date(entry.created_at).toLocaleDateString
 // }
 
 // Helper function to find common themes in text
-function findCommonThemes(texts: string[]): string[] {
-    const commonKeywords = [
-        'work', 'stress', 'tired', 'family', 'health', 'money', 'relationship',
-        'sleep', 'exercise', 'deadline', 'meeting', 'project', 'friend', 'weekend'
-    ];
+// function findCommonThemes(texts: string[]): string[] {
+//     const commonKeywords = [
+//         'work', 'stress', 'tired', 'family', 'health', 'money', 'relationship',
+//         'sleep', 'exercise', 'deadline', 'meeting', 'project', 'friend', 'weekend'
+//     ];
     
-    const combined = texts.join(' ').toLowerCase();
-    const themes = commonKeywords.filter(keyword => 
-        combined.includes(keyword) && 
-        texts.filter(t => t.toLowerCase().includes(keyword)).length >= 2
-    );
+//     const combined = texts.join(' ').toLowerCase();
+//     const themes = commonKeywords.filter(keyword => 
+//         combined.includes(keyword) && 
+//         texts.filter(t => t.toLowerCase().includes(keyword)).length >= 2
+//     );
     
-    return themes.slice(0, 3);
-}
+//     return themes.slice(0, 3);
+// }
 
 // Add personalized mood analysis fallback
 function getPersonalizedMoodAnalysisFallback(entries: MoodAnalysisEntry[]): string {
