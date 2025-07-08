@@ -16,7 +16,8 @@ export async function POST() {
     }
     
     const userId = session.user.id;
-    const { error } = await notificationService.markAllAsRead(userId);
+    const notificationSvc = notificationService(supabase);
+    const { error } = await notificationSvc.markAllAsRead(userId);
     
     if (error) {
       return NextResponse.json(
