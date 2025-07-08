@@ -2,7 +2,6 @@
 
 import { useState } from 'react'
 import { useAuthStore } from '@//lib/stores/authStore'
-import { userService } from '@//lib/database/users'
 import { Lock, Shield, Trash2, Loader2 } from 'lucide-react'
 
 interface SecuritySettingsProps {
@@ -27,8 +26,19 @@ export default function SecuritySettings({ onMessage }: SecuritySettingsProps) {
     onMessage('')
     
     try {
-      // Implement account deletion
-      await userService.deleteAccount(user.id)
+      // Call API route to delete account (since admin functions are server-only)
+      const response = await fetch('/api/user/delete-account', {
+        method: 'DELETE',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+      })
+
+      if (!response.ok) {
+        const error = await response.json()
+        throw new Error(error.error || 'Failed to delete account')
+      }
+
       onMessage('Account deleted successfully. Signing out...')
       await signOut()
     } catch (error) {
@@ -125,4 +135,4 @@ export default function SecuritySettings({ onMessage }: SecuritySettingsProps) {
       </div>
     </div>
   )
-} 
+}
