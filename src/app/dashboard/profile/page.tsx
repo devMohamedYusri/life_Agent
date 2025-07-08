@@ -1,12 +1,12 @@
 // app/dashboard/profile/page.tsx
 'use client'
 
-import React from 'react'
-import { useState, useEffect } from 'react'
+import React, { useState, useEffect, useMemo } from 'react'
 import { useAuthStore } from '@//lib/stores/authStore'
 import { userService } from '@//lib/database/users'
 import { taskService } from '@//lib/database/tasks'
 import { goalService } from '@//lib/database/goals'
+import { Goal } from '@//lib/database/goals'
 import { habitService } from '@//lib/database/habits'
 import { journalService } from '@//lib/database/journal'
 import { 
@@ -18,10 +18,16 @@ import {
   Target,
   RefreshCw,
   FileText,
-  Activity
+  Activity,
+  Loader2,
+  Clipboard
 } from 'lucide-react'
 import Link from 'next/link'
 import Image from 'next/image'
+import { useSupabase } from '@//lib/hooks/useSupabase'
+import { Database } from '@//types/supabase'
+import { SupabaseClient } from '@supabase/supabase-js'
+import { UserAvatar } from '@//components/userAvatar'
 
 interface Achievement {
   id: string
@@ -64,26 +70,6 @@ interface Task {
   };
 }
 
-interface Goal {
-  goal_id: string;
-  title: string;
-  description: string;
-  goal_type: string;
-  progress: number;
-  deadline: string | null;
-  status: 'active' | 'completed' | 'cancelled';
-  priority: string;
-  created_at: string;
-  updated_at: string;
-  category?: {
-    category_id: string;
-    name: string;
-    color: string;
-    icon: string;
-  };
-  tasks: Task[];
-}
-
 interface Habit {
   habit_id: string;
   title: string;
@@ -120,8 +106,14 @@ interface UserProfile {
   updated_at: string;
 }
 
+interface ServiceResult<T> {
+  data: T[] | null;
+  error: import("@supabase/supabase-js").PostgrestError | null | unknown;
+}
+
 export default function ProfilePage() {
   const { user } = useAuthStore()
+  const { supabase } = useSupabase()
   const [profile, setProfile] = useState<UserProfile | null>(null)
   const [stats, setStats] = useState({
     tasksCompleted: 0,
@@ -137,6 +129,12 @@ export default function ProfilePage() {
   const [recentActivity, setRecentActivity] = useState<Activity[]>([])
   const [loading, setLoading] = useState(true)
 
+  const goalsService = useMemo(() => goalService(supabase as SupabaseClient<Database>), [supabase])
+  const tasksService = useMemo(() => taskService(supabase as SupabaseClient<Database>), [supabase])
+  const habitsService = useMemo(() => habitService(supabase as SupabaseClient<Database>), [supabase])
+  const journalsService = useMemo(() => journalService(supabase), [supabase])
+  const usersService = useMemo(() => userService(supabase), [supabase])
+
   useEffect(() => {
     if (user) {
       loadProfileData()
@@ -148,15 +146,20 @@ export default function ProfilePage() {
       setLoading(true)
 
       // Load profile data
-      const { data: profileData } = await userService.getUserProfile(user!.id)
+      const { data: profileData } = await usersService.getUserProfile(user!.id)
       setProfile(profileData)
 
       // Load all user data for stats
-      const [tasksResult, goalsResult, habitsResult, journalResult] = await Promise.all([
-        taskService.getUserTasks(user!.id),
-        goalService.getUserGoals(user!.id),
-        habitService.getUserHabits(user!.id),
-        journalService.getUserJournalEntries(user!.id)
+      const [tasksResult, goalsResult, habitsResult, journalResult]: [
+        ServiceResult<Task>,
+        ServiceResult<Goal>,
+        ServiceResult<Habit>,
+        ServiceResult<JournalEntry>
+      ] = await Promise.all([
+        tasksService.getUserTasks(user!.id),
+        goalsService.getUserGoals(user!.id),
+        habitsService.getUserHabits(user!.id),
+        journalsService.getUserJournalEntries(user!.id)
       ])
 
       const tasks = tasksResult.data || []
@@ -206,7 +209,7 @@ export default function ProfilePage() {
     // Get the best streak from all habits
     let maxStreak = 0
     for (const habit of habits) {
-      const { data: streak } = await habitService.gethabitstreak(habit.habit_id, userId)
+      const { data: streak } = await habitsService.gethabitstreak(habit.habit_id, userId)
       if (streak > maxStreak) {
         maxStreak = streak
       }
@@ -296,354 +299,250 @@ export default function ProfilePage() {
     habits: Habit[], 
     journalEntries: JournalEntry[]
   ): Promise<Activity[]> => {
-    const activities: Activity[] = []
+    const allActivities: Activity[] = []
 
-    // Add recent tasks
-    tasks.slice(0, 3).forEach(task => {
-      activities.push({
+    tasks.forEach(task => {
+      allActivities.push({
         id: task.task_id,
         type: 'task',
-        action: task.is_completed ? 'Completed task' : 'Created task',
+        action: task.is_completed ? 'Completed task:' : 'Updated task:',
         title: task.title,
         timestamp: task.updated_at || task.created_at,
-        icon: <CheckSquare className="w-4 h-4" />,
-        color: task.is_completed ? 'text-green-500' : 'text-blue-500'
+        icon: task.is_completed ? <CheckSquare className="w-4 h-4" /> : <Clipboard className="w-4 h-4" />,
+        color: task.is_completed ? 'bg-green-100 text-green-700 dark:bg-green-900/20 dark:text-green-400' : 'bg-blue-100 text-blue-700 dark:bg-blue-900/20 dark:text-blue-400'
       })
     })
 
-    // Add recent goals
-    goals.slice(0, 2).forEach(goal => {
-      activities.push({
+    goals.forEach(goal => {
+      allActivities.push({
         id: goal.goal_id,
         type: 'goal',
-        action: goal.status === 'completed' ? 'Achieved goal' : 'Set new goal',
+        action: goal.status === 'completed' ? 'Achieved goal:' : 'Updated goal progress:',
         title: goal.title,
         timestamp: goal.updated_at || goal.created_at,
-        icon: <Target className="w-4 h-4" />,
-        color: goal.status === 'completed' ? 'text-green-500' : 'text-purple-500'
+        icon: goal.status === 'completed' ? <Award className="w-4 h-4" /> : <Target className="w-4 h-4" />,
+        color: goal.status === 'completed' ? 'bg-yellow-100 text-yellow-700 dark:bg-yellow-900/20 dark:text-yellow-400' : 'bg-purple-100 text-purple-700 dark:bg-purple-900/20 dark:text-purple-400'
       })
     })
 
-    // Add recent habits
-    habits.slice(0, 2).forEach(habit => {
-      activities.push({
+    habits.forEach(habit => {
+      allActivities.push({
         id: habit.habit_id,
         type: 'habit',
-        action: 'Tracked habit',
+        action: 'Tracked habit:',
         title: habit.title,
         timestamp: habit.created_at,
         icon: <RefreshCw className="w-4 h-4" />,
-        color: 'text-orange-500'
+        color: 'bg-orange-100 text-orange-700 dark:bg-orange-900/20 dark:text-orange-400'
       })
     })
 
-    // Add recent journal entries
-    journalEntries.slice(0, 2).forEach(entry => {
-      activities.push({
-        id: entry.entry_id,
+    journalEntries.forEach(journal => {
+      allActivities.push({
+        id: journal.entry_id,
         type: 'journal',
-        action: 'Wrote journal entry',
-        title: entry.content.substring(0, 30) + '...',
-        timestamp: entry.created_at,
+        action: 'Journaled about:',
+        title: journal.content.substring(0, 50) + (journal.content.length > 50 ? '...' : ''),
+        timestamp: journal.created_at,
         icon: <FileText className="w-4 h-4" />,
-        color: 'text-indigo-500'
+        color: 'bg-rose-100 text-rose-700 dark:bg-rose-900/20 dark:text-rose-400'
       })
     })
 
-    // Sort by timestamp and return
-    return activities.sort((a, b) => 
-      new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime()
-    )
+    return allActivities.sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime()).slice(0, 5)
   }
 
-  // const getInitials = (name: string) => {
-  //   if (!name) return 'U'
-  //   return name
-  //     .split(' ')
-  //     .map(n => n[0])
-  //     .join('')
-  //     .toUpperCase()
-  //     .slice(0, 2)
-  // }
-
   const formatTimeAgo = (timestamp: string) => {
+    const date = new Date(timestamp)
     const now = new Date()
-    const then = new Date(timestamp)
-    const diff = now.getTime() - then.getTime()
-    const hours = Math.floor(diff / (1000 * 60 * 60))
-    const days = Math.floor(hours / 24)
+    const seconds = Math.floor((now.getTime() - date.getTime()) / 1000)
 
-    if (days > 0) return `${days} day${days > 1 ? 's' : ''} ago`
-    if (hours > 0) return `${hours} hour${hours > 1 ? 's' : ''} ago`
-    return 'Just now'
+    if (seconds < 60) return 'just now'
+    const minutes = Math.floor(seconds / 60)
+    if (minutes < 60) return `${minutes} minute${minutes > 1 ? 's' : ''} ago`
+    const hours = Math.floor(minutes / 60)
+    if (hours < 24) return `${hours} hour${hours > 1 ? 's' : ''} ago`
+    const days = Math.floor(hours / 24)
+    if (days < 7) return `${days} day${days > 1 ? 's' : ''} ago`
+    
+    return date.toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' })
   }
 
   if (loading) {
     return (
-      <div className="flex items-center justify-center h-64">
-        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-purple-500"></div>
+      <div className="flex items-center justify-center h-full">
+        <div className="text-center text-gray-600 dark:text-gray-400">
+          <Loader2 className="w-8 h-8 animate-spin mx-auto mb-4" />
+          <p>Loading profile...</p>
+        </div>
       </div>
-    )
+    );
+  }
+
+  if (!user || !profile) {
+    return (
+      <div className="flex items-center justify-center h-full">
+        <div className="text-center text-gray-600 dark:text-gray-400">
+          <Loader2 className="w-8 h-8 animate-spin mx-auto mb-4" />
+          <p>Loading profile...</p>
+        </div>
+      </div>
+    );
   }
 
   return (
-    <div className="min-h-screen bg-gray-50 dark:bg-gray-900">
-      {/* Header */}
-      <div className="mb-8">
-        <h1 className="text-3xl font-bold text-gray-900 dark:text-white">Profile</h1>
-        <p className="text-gray-600 dark:text-gray-300 mt-2">Your personal dashboard and achievements</p>
-      </div>
+    <div className="min-h-screen bg-gray-50 dark:bg-gradient-to-br dark:from-gray-900 dark:to-gray-950 p-4 sm:p-6 lg:p-8">
+      <div className="max-w-7xl mx-auto">
+        {/* Profile Header (Hero Section) */}
+        <section className="bg-white dark:bg-gray-800 rounded-xl shadow-lg p-6 sm:p-8 mb-8 flex flex-col md:flex-row items-center justify-between relative overflow-hidden">
+          {/* Background Gradient Effect */}
+          <div className="absolute inset-0 bg-gradient-to-br from-purple-50 to-indigo-50 dark:from-gray-800 dark:to-gray-900 opacity-50"></div>
+          <div className="absolute inset-0 top-1/2 left-1/2 w-48 h-48 bg-purple-200 dark:bg-purple-900 rounded-full mix-blend-multiply filter blur-xl opacity-30 animate-blob"></div>
+          <div className="absolute inset-0 bottom-0 right-0 w-48 h-48 bg-indigo-200 dark:bg-indigo-900 rounded-full mix-blend-multiply filter blur-xl opacity-30 animate-blob animation-delay-2000"></div>
 
-      {/* Profile Card */}
-      <div className="bg-white dark:bg-gray-800 rounded-lg shadow-lg overflow-hidden">
-        {/* Cover Image */}
-        <div className="h-32 bg-gradient-to-r from-purple-500 to-pink-500"></div>
-        
-        {/* Profile Info */}
-        <div className="relative px-6 pb-6">
-          <div className="flex flex-col sm:flex-row sm:items-end sm:space-x-5">
-            {/* Avatar */}
-            <div className="-mt-12 sm:-mt-16">
-              <div className="flex items-center space-x-4">
-                <div className="relative">
-                  <Image
-                    src={user.avatar_url || '/default-avatar.png'}
-                    alt="Profile"
-                    width={100}
-                    height={100}
-                    className="rounded-full object-cover"
-                  />
-                  <button
-                    onClick={() => document.getElementById('avatar-upload')?.click()}
-                    className="absolute bottom-0 right-0 bg-white dark:bg-gray-800 rounded-full p-1 shadow-lg hover:bg-gray-100 dark:hover:bg-gray-700"
-                  >
-                    <svg className="w-4 h-4 text-gray-600 dark:text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z" />
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 13a3 3 0 11-6 0 3 3 0 016 0z" />
-                    </svg>
-                  </button>
-                </div>
-              </div>
-            </div>
-
-            {/* Name and Bio */}
-            <div className="mt-6 sm:mt-0 sm:flex-1 sm:min-w-0 sm:flex sm:items-center sm:justify-between">
-              <div>
-                <h2 className="text-2xl font-bold text-gray-900 dark:text-white">
-                  {profile?.user_name || user?.email?.split('@')[0] || 'User'}
-                </h2>
-                <p className="text-gray-600 dark:text-gray-300 flex items-center mt-1">
-                  <Mail className="w-4 h-4 mr-1" />
-                  {user?.email}
+          <div className="relative z-10 flex flex-col md:flex-row items-center text-center md:text-left w-full">
+            <UserAvatar
+              avatarUrl={profile.avatar_url}
+              size={120}
+              className="border-4 border-white dark:border-gray-700 shadow-md mb-4 md:mb-0 md:mr-6"
+            />
+            <div>
+              <h1 className="text-3xl sm:text-4xl font-bold text-gray-900 dark:text-white mb-2 leading-tight">
+                Welcome, {profile.user_name || profile.email}!
+              </h1>
+              {profile.bio && (
+                <p className="text-gray-600 dark:text-gray-300 text-lg mb-4 max-w-2xl mx-auto md:mx-0">
+                  {profile.bio}
                 </p>
-                {profile?.bio && (
-                  <p className="mt-2 text-gray-700 dark:text-gray-300">{profile.bio}</p>
-                )}
-                <p className="text-sm text-gray-500 dark:text-gray-400 mt-2">
-                  Member since {new Date(profile?.created_at || user?.created_at).toLocaleDateString()}
-                </p>
+              )}
+              <div className="flex items-center justify-center md:justify-start text-gray-500 dark:text-gray-400 mb-2">
+                <Mail className="w-4 h-4 mr-2" />
+                <span className="text-sm">{profile.email}</span>
               </div>
-              <Link
-                href="/dashboard/settings"
-                className="mt-4 sm:mt-0 inline-flex items-center px-4 py-2 bg-purple-600 text-white rounded-md hover:bg-purple-700 transition-colors"
-              >
+              <Link href="/dashboard/settings" className="inline-flex items-center text-purple-600 hover:text-purple-700 dark:text-purple-400 dark:hover:text-purple-300 font-medium transition-colors">
                 <Edit className="w-4 h-4 mr-2" />
                 Edit Profile
               </Link>
             </div>
           </div>
+        </section>
 
-          {/* Stats Grid */}
-          <div className="mt-6 grid grid-cols-2 sm:grid-cols-4 gap-4">
-            <div className="bg-gray-50 dark:bg-gray-700 rounded-lg p-4 text-center">
-              <p className="text-2xl font-bold text-purple-600 dark:text-purple-400">{stats.tasksCompleted}</p>
-              <p className="text-sm text-gray-600 dark:text-gray-300">Tasks Done</p>
-            </div>
-            <div className="bg-gray-50 dark:bg-gray-700 rounded-lg p-4 text-center">
-              <p className="text-2xl font-bold text-green-600 dark:text-green-400">{stats.goalsAchieved}</p>
-              <p className="text-sm text-gray-600 dark:text-gray-300">Goals Achieved</p>
-            </div>
-            <div className="bg-gray-50 dark:bg-gray-700 rounded-lg p-4 text-center">
-              <p className="text-2xl font-bold text-orange-600 dark:text-orange-400">{stats.currentStreak}</p>
-              <p className="text-sm text-gray-600 dark:text-gray-300">Day Streak</p>
-            </div>
-            <div className="bg-gray-50 dark:bg-gray-700 rounded-lg p-4 text-center">
-              <p className="text-2xl font-bold text-blue-600 dark:text-blue-400">{stats.totalPoints}</p>
-              <p className="text-sm text-gray-600 dark:text-gray-300">Total Points</p>
-            </div>
-          </div>
+        {/* Stats Grid */}
+        <section className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
+          <StatCard 
+            title="Tasks Completed" 
+            value={stats.tasksCompleted} 
+            icon={<CheckSquare className="w-6 h-6 text-blue-500" />} 
+            color="bg-blue-50 dark:bg-blue-900/20" 
+          />
+          <StatCard 
+            title="Goals Achieved" 
+            value={stats.goalsAchieved} 
+            icon={<Target className="w-6 h-6 text-green-500" />} 
+            color="bg-green-50 dark:bg-green-900/20" 
+          />
+          <StatCard 
+            title="Current Streak" 
+            value={stats.currentStreak} 
+            icon={<TrendingUp className="w-6 h-6 text-purple-500" />} 
+            color="bg-purple-50 dark:bg-purple-900/20" 
+          />
+          <StatCard 
+            title="Productivity Score" 
+            value={`${stats.productivityScore}%`} 
+            icon={<Activity className="w-6 h-6 text-orange-500" />} 
+            color="bg-orange-50 dark:bg-orange-900/20" 
+          />
+        </section>
 
-          {/* Additional Stats */}
-          <div className="mt-4 grid grid-cols-2 sm:grid-cols-4 gap-4">
-            <div className="bg-gray-50 dark:bg-gray-700 rounded-lg p-4 text-center">
-              <p className="text-2xl font-bold text-indigo-600 dark:text-indigo-400">{stats.habitsTracked}</p>
-              <p className="text-sm text-gray-600 dark:text-gray-300">Habits Tracked</p>
-            </div>
-            <div className="bg-gray-50 dark:bg-gray-700 rounded-lg p-4 text-center">
-              <p className="text-2xl font-bold text-pink-600 dark:text-pink-400">{stats.journalEntries}</p>
-              <p className="text-sm text-gray-600 dark:text-gray-300">Journal Entries</p>
-            </div>
-            <div className="bg-gray-50 dark:bg-gray-700 rounded-lg p-4 text-center">
-              <p className="text-2xl font-bold text-teal-600 dark:text-teal-400">{stats.productivityScore}%</p>
-              <p className="text-sm text-gray-600 dark:text-gray-300">Productivity Score</p>
-            </div>
-            <div className="bg-gray-50 dark:bg-gray-700 rounded-lg p-4 text-center">
-              <p className="text-2xl font-bold text-yellow-600 dark:text-yellow-400">{stats.completionRate}%</p>
-              <p className="text-sm text-gray-600 dark:text-gray-300">Completion Rate</p>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      {/* Progress Overview */}
-      <div className="mt-8 bg-white dark:bg-gray-800 rounded-lg shadow p-6">
-        <h3 className="text-xl font-semibold text-gray-900 dark:text-white mb-4 flex items-center">
-          <TrendingUp className="w-5 h-5 mr-2 text-purple-600 dark:text-purple-400" />
-          Progress Overview
-        </h3>
-        <div className="space-y-4">
-          <div>
-            <div className="flex justify-between items-center mb-2">
-              <span className="text-sm font-medium text-gray-700 dark:text-gray-300">Task Completion</span>
-              <span className="text-sm text-gray-600 dark:text-gray-400">{stats.completionRate}%</span>
-            </div>
-            <div className="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-2">
-              <div
-                className="bg-gradient-to-r from-purple-500 to-pink-500 h-2 rounded-full transition-all duration-300"
-                style={{ width: `${stats.completionRate}%` }}
-              />
-            </div>
-          </div>
-          
-          <div>
-            <div className="flex justify-between items-center mb-2">
-              <span className="text-sm font-medium text-gray-700 dark:text-gray-300">Productivity Score</span>
-              <span className="text-sm text-gray-600 dark:text-gray-400">{stats.productivityScore}%</span>
-            </div>
-            <div className="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-2">
-              <div
-                className="bg-gradient-to-r from-blue-500 to-teal-500 h-2 rounded-full transition-all duration-300"
-                style={{ width: `${stats.productivityScore}%` }}
-              />
-            </div>
-          </div>
-        </div>
-      </div>
-
-      {/* Achievements Section */}
-      <div className="mt-8 bg-white dark:bg-gray-800 rounded-lg shadow p-6">
-        <h3 className="text-xl font-semibold text-gray-900 dark:text-white mb-4 flex items-center">
-          <Award className="w-5 h-5 mr-2 text-yellow-600 dark:text-yellow-400" />
-          Achievements
-        </h3>
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-          {achievements.map(achievement => (
-            <div
-              key={achievement.id}
-              className={`p-4 rounded-lg border-2 transition-all ${
-                achievement.unlocked
-                  ? 'border-purple-200 dark:border-purple-700 bg-purple-50 dark:bg-purple-900/20'
-                  : 'border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800 opacity-60'
-              }`}
-            >
-              <div className="flex items-start space-x-3">
-                <span className="text-3xl">{achievement.icon}</span>
-                <div className="flex-1">
-                  <h4 className={`font-medium ${
-                    achievement.unlocked 
-                      ? 'text-gray-900 dark:text-white' 
-                      : 'text-gray-500 dark:text-gray-400'
-                  }`}>
-                    {achievement.title}
-                  </h4>
-                  <p className={`text-sm mt-1 ${
-                    achievement.unlocked 
-                      ? 'text-gray-600 dark:text-gray-300' 
-                      : 'text-gray-400 dark:text-gray-500'
-                  }`}>
-                    {achievement.description}
-                  </p>
-                  <p className={`text-xs mt-2 ${
-                    achievement.unlocked 
-                      ? 'text-green-600 dark:text-green-400' 
-                      : 'text-gray-400 dark:text-gray-500'
-                  }`}>
-                    {achievement.unlocked ? '✓ Unlocked' : achievement.requirement}
-                  </p>
-                </div>
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+          {/* Achievements Section */}
+          <section className="lg:col-span-2 bg-white dark:bg-gray-800 rounded-xl shadow-lg p-6">
+            <h2 className="text-2xl font-semibold text-gray-900 dark:text-white mb-6">Your Achievements</h2>
+            {achievements.length > 0 ? (
+              <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4">
+                {achievements.map((achievement) => (
+                  <AchievementCard key={achievement.id} achievement={achievement} />
+                ))}
               </div>
-            </div>
-          ))}
-        </div>
-      </div>
+            ) : (
+              <p className="text-gray-600 dark:text-gray-400">No achievements unlocked yet. Keep working on your goals!</p>
+            )}
+          </section>
 
-      {/* Activity Timeline */}
-      <div className="mt-8 bg-white dark:bg-gray-800 rounded-lg shadow p-6">
-        <h3 className="text-xl font-semibold text-gray-900 dark:text-white mb-4 flex items-center">
-          <Activity className="w-5 h-5 mr-2 text-blue-600 dark:text-blue-400" />
-          Recent Activity
-        </h3>
-        {recentActivity.length === 0 ? (
-          <p className="text-gray-500 dark:text-gray-400 text-center py-8">
-            No recent activity. Start by creating a task or setting a goal!
-          </p>
-        ) : (
-          <div className="space-y-4">
-            {recentActivity.map((activity) => (
-              <div key={`${activity.type}-${activity.id}`} className="flex items-start space-x-3">
-                <div className={`mt-0.5 ${activity.color}`}>
-                  {activity.icon}
-                </div>
-                <div className="flex-1">
-                  <p className="text-sm text-gray-900 dark:text-gray-100">
-                    <span className="font-medium">{activity.action}</span>
-                    {' '}
-                    <span className="text-gray-700 dark:text-gray-300">&quot;{activity.title}&quot;</span>
-                  </p>
-                  <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
-                    {formatTimeAgo(activity.timestamp)}
-                  </p>
-                </div>
-              </div>
-            ))}
-          </div>
-        )}
-      </div>
-
-      {/* Quick Actions */}
-      <div className="mt-8 bg-gradient-to-r from-purple-500 to-pink-500 rounded-lg shadow-lg p-6 text-white">
-        <h3 className="text-xl font-semibold mb-4">Quick Actions</h3>
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
-          <Link
-            href="/dashboard/tasks"
-            className="bg-white/20 backdrop-blur rounded-lg p-4 text-center hover:bg-white/30 transition-colors"
-          >
-            <CheckSquare className="w-8 h-8 mx-auto mb-2" />
-            <span className="text-sm">New Task</span>
-          </Link>
-          <Link
-            href="/dashboard/goals"
-            className="bg-white/20 backdrop-blur rounded-lg p-4 text-center hover:bg-white/30 transition-colors"
-          >
-            <Target className="w-8 h-8 mx-auto mb-2" />
-            <span className="text-sm">Set Goal</span>
-          </Link>
-          <Link
-            href="/dashboard/habits"
-            className="bg-white/20 backdrop-blur rounded-lg p-4 text-center hover:bg-white/30 transition-colors"
-          >
-            <RefreshCw className="w-8 h-8 mx-auto mb-2" />
-            <span className="text-sm">Track Habit</span>
-          </Link>
-          <Link
-            href="/dashboard/journals"
-            className="bg-white/20 backdrop-blur rounded-lg p-4 text-center hover:bg-white/30 transition-colors"
-          >
-            <FileText className="w-8 h-8 mx-auto mb-2" />
-            <span className="text-sm">Write Entry</span>
-          </Link>
+          {/* Recent Activity */}
+          <section className="bg-white dark:bg-gray-800 rounded-xl shadow-lg p-6">
+            <h2 className="text-2xl font-semibold text-gray-900 dark:text-white mb-6">Recent Activity</h2>
+            {recentActivity.length > 0 ? (
+              <ul className="space-y-4">
+                {recentActivity.map((activity) => (
+                  <ActivityItem key={activity.id} activity={activity} formatTimeAgo={formatTimeAgo} />
+                ))}
+              </ul>
+            ) : (
+              <p className="text-gray-600 dark:text-gray-400">No recent activity.</p>
+            )}
+          </section>
         </div>
       </div>
     </div>
   )
 }
+
+// Helper Components (to be moved or defined within the file if small enough)
+
+interface StatCardProps {
+  title: string;
+  value: string | number;
+  icon: React.ReactNode;
+  color: string;
+}
+
+const StatCard = ({ title, value, icon, color }: StatCardProps) => (
+  <div className={`p-6 rounded-xl shadow-md flex items-center space-x-4 ${color}`}>
+    <div className="p-3 rounded-full bg-white dark:bg-gray-900 shadow-sm flex items-center justify-center">
+      {icon}
+    </div>
+    <div>
+      <p className="text-sm font-medium text-gray-600 dark:text-gray-400">{title}</p>
+      <h3 className="text-2xl font-bold text-gray-900 dark:text-white">{value}</h3>
+    </div>
+  </div>
+);
+
+interface AchievementCardProps {
+  achievement: Achievement;
+}
+
+const AchievementCard = ({ achievement }: AchievementCardProps) => (
+  <div className={`p-4 rounded-lg border flex items-start space-x-4 ${
+    achievement.unlocked ? 'bg-green-50 border-green-200 dark:bg-green-900/20 dark:border-green-800/30' : 'bg-gray-50 border-gray-200 dark:bg-gray-900/20 dark:border-gray-700'
+  }`}>
+    <div className="flex-shrink-0 text-3xl leading-none">
+      {achievement.icon}
+    </div>
+    <div>
+      <h4 className={`font-semibold ${achievement.unlocked ? 'text-green-800 dark:text-green-400' : 'text-gray-800 dark:text-gray-200'}`}>{achievement.title}</h4>
+      <p className="text-sm text-gray-600 dark:text-gray-400">{achievement.description}</p>
+    </div>
+  </div>
+);
+
+interface ActivityItemProps {
+  activity: Activity;
+  formatTimeAgo: (timestamp: string) => string;
+}
+
+const ActivityItem = ({ activity, formatTimeAgo }: ActivityItemProps) => (
+  <li className="flex items-start space-x-3 p-3 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors">
+    <div className={`p-2 rounded-full ${activity.color} flex-shrink-0`}>
+      {activity.icon}
+    </div>
+    <div>
+      <p className="text-gray-800 dark:text-gray-200 text-sm">
+        <span className="font-medium">{activity.action}</span> {activity.title}
+      </p>
+      <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">{formatTimeAgo(activity.timestamp)}</p>
+    </div>
+  </li>
+);

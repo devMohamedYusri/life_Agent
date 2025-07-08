@@ -23,7 +23,6 @@ interface SidebarProps {
 
 const navigation = [
     { name: 'Dashboard', href: '/dashboard', icon: <LayoutDashboard className="w-5 h-5" />, emoji: '📊' },
-    { name: 'Analysis', href: '/dashboard/analysis', icon: <BarChart className="w-5 h-5" />, emoji: '📈' },
     { name: 'Tasks', href: '/dashboard/tasks', icon: <CheckSquare className="w-5 h-5" />, emoji: '✅' },
     { name: 'Goals', href: '/dashboard/goals', icon: <Target className="w-5 h-5" />, emoji: '🎯' },
     { name: 'Habits', href: '/dashboard/habits', icon: <RefreshCw className="w-5 h-5" />, emoji: '🔄' },

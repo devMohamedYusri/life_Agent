@@ -207,6 +207,7 @@ export interface Database {
           is_ai_suggested: boolean
           created_at: string
           updated_at: string | null
+          streak: number | null
         }
         Insert: {
           habit_id?: string
@@ -220,6 +221,7 @@ export interface Database {
           is_ai_suggested?: boolean
           created_at?: string
           updated_at?: string | null
+          streak?: number | null
         }
         Update: {
           habit_id?: string
@@ -233,6 +235,7 @@ export interface Database {
           is_ai_suggested?: boolean
           created_at?: string
           updated_at?: string | null
+          streak?: number | null
         }
       }
       habit_completions: {
@@ -538,4 +541,11 @@ export interface Database {
       }
     }
   }
+}
+
+export interface ExportService {
+  exportToJSON: (userId: string) => Promise<{ success: boolean; error?: unknown }>;
+  exportToCSV: (userId: string, type: 'tasks' | 'goals' | 'habits' | 'journal') => Promise<{ success: boolean; error?: unknown }>;
+  exportToPDF: (userId: string) => Promise<{ success: boolean; error?: unknown }>;
+  importFromJSON: (userId: string, file: File) => Promise<{ success: boolean; error?: unknown }>;
 } 

@@ -61,6 +61,7 @@ interface AIContext {
   recentTasks?: TaskType[];
   recentGoals?: GoalType[];
   recentHabits?: Habit[];
+  recentJournalEntries?: JournalEntry[];
   recentMessages?: { role: string; content: string; }[];
 }
 

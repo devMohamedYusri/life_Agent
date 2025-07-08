@@ -19,6 +19,7 @@ import {
   PlayCircle
 } from 'lucide-react'
 import { useUserTimeZone } from '../../lib/hooks/useUserTimeZone'
+import { useSupabase } from '../../lib/hooks/useSupabase'
 
 interface Task {
   task_id: string
@@ -37,6 +38,7 @@ type TaskPriority = "medium" | "low" | "high" | "urgent"
 
 export default function TasksPage() {
   const { user } = useAuthStore()
+  const { supabase } = useSupabase()
   const { formatDateTime, formatDate } = useUserTimeZone();
   const [tasks, setTasks] = useState<Task[]>([])
   const [categories, setCategories] = useState<{ category_id: string; name: string; icon: string; color: string }[]>([])
@@ -71,9 +73,9 @@ export default function TasksPage() {
       setLoading(true)
       
       const [tasksResult, categoriesResult, goalsResult] = await Promise.all([
-        taskService.getUserTasks(user.id),
-        categoryService.getUserCategories(user.id),
-        goalService.getUserGoals(user.id)
+        taskService(supabase).getUserTasks(user.id),
+        categoryService(supabase).getUserCategories(user.id),
+        goalService(supabase).getUserGoals(user.id)
       ])
       
       if (tasksResult.error) {
@@ -88,7 +90,7 @@ export default function TasksPage() {
     } finally {
       setLoading(false)
     }
-  }, [user?.id])
+  }, [user?.id, supabase])
 
   useEffect(() => {
     loadData()
@@ -107,7 +109,7 @@ export default function TasksPage() {
         goal_id: formData.goal_id || null
       }
       
-      const { error } = await taskService.createTask(taskData)
+      const { error } = await taskService(supabase).createTask(taskData)
       
       if (error) {
         throw new Error(error.message)
@@ -138,7 +140,7 @@ export default function TasksPage() {
         is_completed: formData.status === 'completed'
       }
       
-      const { error } = await taskService.updateTask(editingTask.task_id, updates)
+      const { error } = await taskService(supabase).updateTask(editingTask.task_id, updates)
       
       if (error) {
         throw new Error(error.message)
@@ -189,7 +191,7 @@ export default function TasksPage() {
         is_completed: !isCompleted,
         status: (!isCompleted ? "completed" : "pending") as TaskStatus
       }
-      const { error } = await taskService.updateTask(taskId, updates)
+      const { error } = await taskService(supabase).updateTask(taskId, updates)
       
       if (error) {
         throw new Error(error.message)
@@ -208,7 +210,7 @@ export default function TasksPage() {
         status,
         is_completed: status === 'completed'
       }
-      const { error } = await taskService.updateTask(taskId, updates)
+      const { error } = await taskService(supabase).updateTask(taskId, updates)
       
       if (error) {
         throw new Error(error.message)
@@ -225,7 +227,7 @@ export default function TasksPage() {
     if (!window.confirm('Are you sure you want to delete this task?')) return
     
     try {
-      await taskService.deleteTask(taskId)
+      await taskService(supabase).deleteTask(taskId)
       await loadData()
     } catch (error) {
       console.error('Error deleting task:', error)
@@ -246,7 +248,7 @@ export default function TasksPage() {
         goal_id: null
       }
       
-      await taskService.createTask(taskData)
+      await taskService(supabase).createTask(taskData)
       await loadData()
       setShowTaskMenu(null)
     } catch (error) {

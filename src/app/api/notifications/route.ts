@@ -14,8 +14,9 @@ async function getAuthenticatedUser() {
 
 export async function GET() {
   try {
+    const supabase = createRouteHandlerClient({ cookies });
     const user = await getAuthenticatedUser();
-    const { data, error } = await notificationService.getUnread(user.id);
+    const { data, error } = await notificationService(supabase).getUnread(user.id);
     
     if (error) {
       return NextResponse.json(
@@ -37,6 +38,7 @@ export async function GET() {
 
 export async function POST(req: NextRequest) {
   try {
+    const supabase = createRouteHandlerClient({ cookies });
     const user = await getAuthenticatedUser();
     const body = await req.json();
     
@@ -53,7 +55,7 @@ export async function POST(req: NextRequest) {
       user_id: user.id,
     };
     
-    const { data: newNotification } = await notificationService.create(notificationData);
+    const { data: newNotification } = await notificationService(supabase).create(notificationData);
     
     // Publish to Ably for real-time updates
     try {
@@ -65,7 +67,6 @@ export async function POST(req: NextRequest) {
 
     // Send web push notification if subscriptions exist
     try {
-      const supabase = createRouteHandlerClient({ cookies });
       const { data: subscriptions, error: subError } = await supabase
         .from('push_subscriptions')
         .select('subscription_details')

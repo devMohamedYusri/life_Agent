@@ -1,9 +1,12 @@
 // app/dashboard/settings/page.tsx
 'use client'
 
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useMemo } from 'react'
 import { useAuthStore } from '@//lib/stores/authStore'
-import { userService } from '@//lib/database/users'
+import { userService, UserProfile } from '@//lib/database/users'
+import { useSupabase } from '@//lib/hooks/useSupabase'
+import { Database } from '@//types/supabase'
+import { SupabaseClient } from '@supabase/supabase-js'
 import { 
   User, 
   Bell, 
@@ -20,15 +23,6 @@ import AppearanceSettings from '@components/dashboard/settings/AppearanceSetting
 import SecuritySettings from '@components/dashboard/settings/SecuritySettings'
 import DataPrivacySettings from '@components/dashboard/settings/DataPrivacySettings'
 
-interface UserProfile {
-  id: string
-  email: string
-  user_name: string
-  avatar_url?: string
-  bio?: string
-  created_at: string
-}
-
 interface NotificationSettingsType {
   emailReminders: boolean
   taskDeadlines: boolean
@@ -40,6 +34,8 @@ interface NotificationSettingsType {
 
 export default function SettingsPage() {
   const { user, signOut } = useAuthStore()
+  const { supabase } = useSupabase()
+  const usersService = useMemo(() => userService(supabase as SupabaseClient<Database>), [supabase])
   const [activeTab, setActiveTab] = useState('profile')
   const [loading, setLoading] = useState(false)
   const [message, setMessage] = useState('')
@@ -51,7 +47,8 @@ export default function SettingsPage() {
     user_name: '',
     avatar_url: '',
     bio: '',
-    created_at: ''
+    created_at: new Date().toISOString(),
+    updated_at: new Date().toISOString()
   })
   
   // Notification settings
@@ -80,7 +77,7 @@ export default function SettingsPage() {
     if (!user) return
     
     try {
-      const { data } = await userService.getUserProfile(user.id)
+      const { data } = await usersService.getUserProfile(user.id)
       if (data) {
         // Ensure all values are defined to prevent controlled/uncontrolled input errors
         setProfile({
@@ -89,7 +86,8 @@ export default function SettingsPage() {
           user_name: data.user_name || '',
           avatar_url: data.avatar_url || '',
           bio: data.bio || '',
-          created_at: data.created_at || ''
+          created_at: data.created_at || '',
+          updated_at: data.updated_at || ''
         })
       }
       
@@ -109,7 +107,7 @@ export default function SettingsPage() {
       console.error('Error loading user data:', error)
       handleMessage('Error loading user data. Please try again.', true)
     }
-  }, [user, handleMessage])
+  }, [user, handleMessage, usersService])
 
   useEffect(() => {
     if (user) {
@@ -125,13 +123,15 @@ export default function SettingsPage() {
     setMessage('')
     
     try {
-      await userService.updateProfile(user.id, {
+      const { data, error } = await usersService.updateUserProfile(user.id, {
         user_name: updatedProfile.user_name,
         bio: updatedProfile.bio,
         avatar_url: updatedProfile.avatar_url
       })
+
+      if (error) throw error
       
-      setProfile(updatedProfile)
+      setProfile(data)
       handleMessage('Profile updated successfully!')
     } catch (error) {
       console.error('Error updating profile:', error)

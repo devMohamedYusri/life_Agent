@@ -1,9 +1,9 @@
-import { client } from '../supabase'
+import { SupabaseClient } from "@supabase/supabase-js";
 
-export const journalService = {
+export const journalService = (supabase) => ({
   // Get all journal entries for user
   async getUserJournalEntries(userId, limit = 50) {
-    const { data, error } = await client
+    const { data, error } = await supabase
       .from('journal_entries')
       .select('*')
       .eq('user_id', userId)
@@ -15,7 +15,7 @@ export const journalService = {
 
   // Get journal entry by date
   async getJournalEntryByDate(userId, date) {
-    const { data, error } = await client
+    const { data, error } = await supabase
       .from('journal_entries')
       .select('*')
       .eq('user_id', userId)
@@ -27,7 +27,7 @@ export const journalService = {
 
   // Create new journal entry
   async createJournalEntry(entryData) {
-    const { data, error } = await client
+    const { data, error } = await supabase
       .from('journal_entries')
       .insert([entryData])
       .select()
@@ -38,7 +38,7 @@ export const journalService = {
 
   // Update journal entry
   async updateJournalEntry(entryId, updates) {
-    const { data, error } = await client
+    const { data, error } = await supabase
       .from('journal_entries')
       .update(updates)
       .eq('entry_id', entryId)
@@ -50,7 +50,7 @@ export const journalService = {
 
   // Delete journal entry
   async deleteJournalEntry(entryId) {
-    const { data, error } = await client
+    const { data, error } = await supabase
       .from('journal_entries')
       .delete()
       .eq('entry_id', entryId)
@@ -60,7 +60,7 @@ export const journalService = {
 
   // Get entries by mood
   async getEntriesByMood(userId, mood) {
-    const { data, error } = await client
+    const { data, error } = await supabase
       .from('journal_entries')
       .select('*')
       .eq('user_id', userId)
@@ -72,7 +72,7 @@ export const journalService = {
 
   // Get entries by tags
   async getEntriesByTag(userId, tag) {
-    const { data, error } = await client
+    const { data, error } = await supabase
       .from('journal_entries')
       .select('*')
       .eq('user_id', userId)
@@ -84,7 +84,7 @@ export const journalService = {
 
   // Get mood statistics
   async getMoodStats(userId, startDate, endDate) {
-    const { data, error } = await client
+    const { data, error } = await supabase
       .from('journal_entries')
       .select('mood, entry_date')
       .eq('user_id', userId)
@@ -104,7 +104,7 @@ export const journalService = {
 
   // Search journal entries
   async searchJournalEntries(userId, searchTerm) {
-    const { data, error } = await client
+    const { data, error } = await supabase
       .from('journal_entries')
       .select('*')
       .eq('user_id', userId)
@@ -119,7 +119,7 @@ export const journalService = {
     const startDate = new Date()
     startDate.setDate(startDate.getDate() - days)
     
-    const { data, error } = await client
+    const { data, error } = await supabase
       .from('journal_entries')
       .select('*')
       .eq('user_id', userId)
@@ -128,4 +128,4 @@ export const journalService = {
     
     return { data, error }
   }
-}
+})

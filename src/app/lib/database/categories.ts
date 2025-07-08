@@ -1,12 +1,12 @@
-import {client} from "../supabase"
 import { Database } from "../../types/supabase"
+import { SupabaseClient } from "@supabase/supabase-js"
 
 export type Category = Database['public']['Tables']['categories']['Row']
 
-export const categoryService = {
+export const categoryService = (supabase: SupabaseClient<Database>) => ({
     // get all categories 
     async getUserCategories(userId: string) {
-        const {data, error} = await client
+        const {data, error} = await supabase
             .from("categories")
             .select("*")
             .eq('user_id', userId)
@@ -17,7 +17,7 @@ export const categoryService = {
 
     // get category with usage stats
     async getCategoryWithStats(userId: string, categoryId: string) {
-        const {data: category, error: categoryError} = await client
+        const {data: category, error: categoryError} = await supabase
             .from("categories")
             .select("*")
             .eq("category_id", categoryId)
@@ -27,17 +27,17 @@ export const categoryService = {
         if (categoryError)
             return {data: null, error: categoryError}
 
-        const {data: goals} = await client
+        const {data: goals} = await supabase
             .from('goals')
             .select("goal_id, status")
             .eq("category_id", categoryId)
 
-        const {data: tasks} = await client
+        const {data: tasks} = await supabase
             .from("tasks")
             .select("task_id, status")
             .eq("category_id", categoryId)
 
-        const {data: habits} = await client
+        const {data: habits} = await supabase
             .from('habits')
             .select("habit_id")
             .eq("category_id", categoryId)
@@ -56,7 +56,7 @@ export const categoryService = {
 
     // create new category
     async createCategory(categoryData: Partial<Category>) {
-        const {data, error} = await client
+        const {data, error} = await supabase
             .from("categories")
             .insert(categoryData)
             .select()
@@ -67,7 +67,7 @@ export const categoryService = {
 
     // update category
     async updateCategory(categoryId: string, updates: Partial<Category>) {
-        const {data, error} = await client
+        const {data, error} = await supabase
             .from("categories")
             .update(updates)
             .eq("category_id", categoryId)
@@ -79,17 +79,17 @@ export const categoryService = {
 
     // delete category
     async deleteCategory(categoryId: string) {
-        const {data, error} = await client
+        const {data, error} = await supabase
             .from('categories')
             .delete()
             .eq('category_id', categoryId)
         
-        return {data, error}  // Fixed: Added return statement
+        return {data, error}
     },
 
     // get categories with item counts
     async getCategoriesWithCounts(userId: string) {
-        const {data, error} = await client
+        const {data, error} = await supabase
             .from('categories')
             .select(`
                 *,
@@ -100,6 +100,6 @@ export const categoryService = {
             .eq("user_id", userId)
             .order('name')
 
-        return {data, error}  // Fixed: Changed 'categories' to 'data'
+        return {data, error}
     }
-}
+})

@@ -1,12 +1,12 @@
-import {client} from '../supabase'
-import { Database } from "../../types/supabase"
+import { Database } from "../../types/supabase";
+import { SupabaseClient } from "@supabase/supabase-js";
 
 export type Goal = Database['public']['Tables']['goals']['Row']
 
-export const goalService={
+export const goalService = (supabase: SupabaseClient<Database>) => ({
     // get all goals for user
     async getUserGoals(userId: string){
-        const {data,error}=await client
+        const {data,error}=await supabase
         .from('goals')
         .select(`
         *,
@@ -23,7 +23,7 @@ export const goalService={
         //get goal with detailed status
 
     async getGoalDetails(goalId: string){
-        const {data,error}=await client
+        const {data,error}=await supabase
         .from('gaols')
         .select(`
             *,
@@ -40,7 +40,7 @@ export const goalService={
     //get goals by type
 
     async getGoalsByType(userId: string, goalType: string){
-        const{data,error}=await client
+        const{data,error}=await supabase
         .from('goals')
         .select(`
             *,
@@ -56,7 +56,7 @@ export const goalService={
 
     //get goal by category
     async getGoalByCategory(userId: string, categoryId: string){
-        const {data,error}=await client
+        const {data,error}=await supabase
         .from('goals')
         .select(`
             *,
@@ -73,7 +73,7 @@ export const goalService={
 
     //get goals by status
     async getGoalsByStatus(userId: string, status: string) {
-        const { data, error } = await client
+        const { data, error } = await supabase
           .from('goals')
           .select(`
             *,
@@ -89,7 +89,7 @@ export const goalService={
     //create new goal
 
     async createGoal(goalData: Partial<Goal>){
-        const {data,error}=await client
+        const {data,error}=await supabase
         .from('goals')
         .insert(goalData)
         .select(`
@@ -104,7 +104,7 @@ export const goalService={
     //update goal
 
     async updateGoal(goalId: string, updates: Partial<Goal>){
-        const {data,error}=await client
+        const {data,error}=await supabase
         .from('goals')
         .update(updates)
         .eq('goal_id',goalId)
@@ -119,7 +119,7 @@ export const goalService={
     //delete goal
 
     async deleteGoal(goalId: string){
-        const {data,error}=await client
+        const {data,error}=await supabase
         .from('goals')
         .delete()
         .eq('goal_id',goalId)
@@ -130,7 +130,7 @@ export const goalService={
     //update goal progress automaticly
 
     async updateGoalProgress(goalId: string, progress: number){
-        const {data,error}=await client
+        const {data,error}=await supabase
         .from('goals')
         .update({progress})
         .eq('goal_id',goalId)
@@ -142,7 +142,7 @@ export const goalService={
 
     //get goal with tasks
     async getGoalWithTasks(goalId: string){
-        const {data,error}=await client
+        const {data,error}=await supabase
         .from('goals')
         .select(`
             *,
@@ -153,4 +153,4 @@ export const goalService={
 
         return {data,error}
     }
-}
+});

@@ -3,8 +3,9 @@
 import { useState, useEffect } from 'react'
 import { useAuthStore } from '@//lib/stores/authStore'
 import { notificationService } from '@//lib/database/notifications'
-import { Bell, Mail, Check, Loader2 } from 'lucide-react'
+import { Bell, Mail, Check, Loader2, Clock, Calendar, Activity, Target } from 'lucide-react'
 import PushSubscriptionManager from './PushSubscriptionManager'
+import { useSupabase } from '@//lib/hooks/useSupabase'
 
 interface NotificationSettings {
   emailReminders: boolean
@@ -21,14 +22,65 @@ interface NotificationSettingsProps {
   onMessage: (message: string, isError?: boolean) => void;
 }
 
+// Default notification settings
+const DEFAULT_SETTINGS: NotificationSettings = {
+  emailReminders: true,
+  taskDeadlines: true,
+  dailyDigest: false,
+  weeklyReport: true,
+  habitReminders: true,
+  browserNotifications: false
+};
+
+interface NotificationOption {
+  key: keyof NotificationSettings;
+  label: string;
+  description: string;
+  icon: React.ComponentType<{ className?: string }>;
+}
+
 export default function NotificationSettings({ initialNotifications, onNotificationsUpdate, onMessage }: NotificationSettingsProps) {
   const { user } = useAuthStore()
-  const [notifications, setNotifications] = useState<NotificationSettings>(initialNotifications)
+  const { supabase } = useSupabase()
+  const [notifications, setNotifications] = useState<NotificationSettings>({
+    ...DEFAULT_SETTINGS,
+    ...initialNotifications
+  })
   const [loading, setLoading] = useState(false)
 
   useEffect(() => {
-    setNotifications(initialNotifications)
+    // Ensure we never set undefined values
+    setNotifications(prev => ({
+      ...DEFAULT_SETTINGS,
+      ...initialNotifications
+    }))
   }, [initialNotifications])
+
+  useEffect(() => {
+    // Load notification settings when component mounts
+    const loadSettings = async () => {
+      if (!user) return
+      try {
+        const { data, error } = await notificationService(supabase).getSettings(user.id)
+        if (error) throw error
+        if (data) {
+          // Ensure we never set undefined values
+          const validSettings = {
+            ...DEFAULT_SETTINGS,
+            ...data
+          }
+          setNotifications(validSettings)
+          onNotificationsUpdate(validSettings)
+        }
+      } catch (error) {
+        console.error('Error loading notification settings:', error)
+        // On error, keep using default settings
+        setNotifications(DEFAULT_SETTINGS)
+        onNotificationsUpdate(DEFAULT_SETTINGS)
+      }
+    }
+    loadSettings()
+  }, [user, supabase, onNotificationsUpdate])
 
   const handleNotificationUpdate = async () => {
     if (!user) return
@@ -37,35 +89,79 @@ export default function NotificationSettings({ initialNotifications, onNotificat
     onMessage('')
     
     try {
-      // Save to localStorage
-      localStorage.setItem('notificationSettings', JSON.stringify(notifications))
-      
       // Request browser notification permission if enabled
       if (notifications.browserNotifications && 'Notification' in window) {
         const permission = await Notification.requestPermission()
         if (permission !== 'granted') {
-          setNotifications(prev => ({ ...prev, browserNotifications: false }))
+          const updatedSettings = {
+            ...notifications,
+            browserNotifications: false
+          }
+          setNotifications(updatedSettings)
           onMessage('Browser notifications permission denied', true)
           setLoading(false)
           return
         }
       }
       
-      // If notificationService has updateSettings method
-      if (notificationService.updateSettings) {
-        await notificationService.updateSettings(user.id, notifications)
-      }
+      // Save settings to database
+      const { error } = await notificationService(supabase).updateSettings(user.id, notifications)
+      if (error) throw error
+      
+      // Save to localStorage for quick access
+      localStorage.setItem('notificationSettings', JSON.stringify(notifications))
       
       onMessage('Notification settings saved!')
-      onNotificationsUpdate(notifications); // Notify parent
+      onNotificationsUpdate(notifications)
     } catch (error) {
       console.error('Error saving notifications:', error)
-      onMessage(`Error saving notification settings: ${(error instanceof Error) ? error.message : 'Please try again.'}`, true);
-
+      onMessage(`Error saving notification settings: ${(error instanceof Error) ? error.message : 'Please try again.'}`, true)
     } finally {
       setLoading(false)
     }
   }
+
+  const handleToggle = (key: keyof NotificationSettings) => {
+    const newValue = !notifications[key]
+    const updatedSettings = {
+      ...notifications,
+      [key]: newValue
+    }
+    setNotifications(updatedSettings)
+  }
+
+  const notificationOptions: NotificationOption[] = [
+    {
+      key: 'emailReminders',
+      label: 'Email Reminders',
+      description: 'Get email notifications for important tasks',
+      icon: Mail
+    },
+    {
+      key: 'taskDeadlines',
+      label: 'Task deadline reminders',
+      description: 'Get notified before task deadlines',
+      icon: Clock
+    },
+    {
+      key: 'dailyDigest',
+      label: 'Daily activity digest',
+      description: 'Receive a summary of your daily activities',
+      icon: Activity
+    },
+    {
+      key: 'weeklyReport',
+      label: 'Weekly progress report',
+      description: 'Get a weekly summary of your progress',
+      icon: Calendar
+    },
+    {
+      key: 'habitReminders',
+      label: 'Habit tracking reminders',
+      description: 'Get reminded to track your habits',
+      icon: Target
+    }
+  ]
 
   return (
     <div className="space-y-6">
@@ -74,60 +170,20 @@ export default function NotificationSettings({ initialNotifications, onNotificat
       <div className="space-y-4">
         <PushSubscriptionManager onMessage={onMessage} />
 
-        <div className="flex items-center justify-between p-4 bg-gray-50 dark:bg-gray-700 rounded-lg">
-          <div className="flex items-center space-x-3">
-            <Mail className="w-5 h-5 text-gray-600 dark:text-gray-400" />
-            <div>
-              <p className="font-medium text-gray-900 dark:text-white">Email Reminders</p>
-              <p className="text-sm text-gray-600 dark:text-gray-400">Get email notifications for important tasks</p>
-            </div>
-          </div>
-          <label className="relative inline-flex items-center cursor-pointer">
-            <input
-              type="checkbox"
-              checked={notifications.emailReminders}
-              onChange={(e) => setNotifications(prev => ({ ...prev, emailReminders: e.target.checked }))}
-              className="sr-only peer"
-            />
-            <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-purple-300 dark:peer-focus:ring-purple-800 rounded-full peer dark:bg-gray-600 peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all dark:border-gray-600 peer-checked:bg-purple-600"></div>
-          </label>
-        </div>
-
-        <div className="flex items-center justify-between p-4 bg-gray-50 dark:bg-gray-700 rounded-lg">
-          <div className="flex items-center space-x-3">
-            <Bell className="w-5 h-5 text-gray-600 dark:text-gray-400" />
-            <div>
-              <p className="font-medium text-gray-900 dark:text-white">Browser Notifications</p>
-              <p className="text-sm text-gray-600 dark:text-gray-400">Get desktop notifications in your browser</p>
-            </div>
-          </div>
-          <label className="relative inline-flex items-center cursor-pointer">
-            <input
-              type="checkbox"
-              checked={notifications.browserNotifications}
-              onChange={(e) => setNotifications(prev => ({ ...prev, browserNotifications: e.target.checked }))}
-              className="sr-only peer"
-            />
-            <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-purple-300 dark:peer-focus:ring-purple-800 rounded-full peer dark:bg-gray-600 peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all dark:border-gray-600 peer-checked:bg-purple-600"></div>
-          </label>
-        </div>
-
-        {/* Add more notification options */}
-        {Object.entries({
-          taskDeadlines: 'Task deadline reminders',
-          dailyDigest: 'Daily activity digest',
-          weeklyReport: 'Weekly progress report',
-          habitReminders: 'Habit tracking reminders'
-        }).map(([key, label]) => (
+        {notificationOptions.map(({ key, label, description, icon: Icon }) => (
           <div key={key} className="flex items-center justify-between p-4 bg-gray-50 dark:bg-gray-700 rounded-lg">
-            <div>
-              <p className="font-medium text-gray-900 dark:text-white">{label}</p>
+            <div className="flex items-center space-x-3">
+              <Icon className="w-5 h-5 text-gray-600 dark:text-gray-400" />
+              <div>
+                <p className="font-medium text-gray-900 dark:text-white">{label}</p>
+                <p className="text-sm text-gray-600 dark:text-gray-400">{description}</p>
+              </div>
             </div>
             <label className="relative inline-flex items-center cursor-pointer">
               <input
                 type="checkbox"
-                checked={notifications[key as keyof NotificationSettings]}
-                onChange={(e) => setNotifications(prev => ({ ...prev, [key]: e.target.checked }))}
+                checked={notifications[key] ?? DEFAULT_SETTINGS[key]}
+                onChange={() => handleToggle(key as keyof NotificationSettings)}
                 className="sr-only peer"
               />
               <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-purple-300 dark:peer-focus:ring-purple-800 rounded-full peer dark:bg-gray-600 peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all dark:border-gray-600 peer-checked:bg-purple-600"></div>

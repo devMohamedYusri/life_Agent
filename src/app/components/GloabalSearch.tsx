@@ -10,6 +10,7 @@ import { habitService } from '@//lib/database/habits'
 import { journalService } from '@//lib/database/journal'
 import { useRouter } from 'next/navigation'
 import debounce from 'lodash.debounce'
+import { useSupabase } from '@//lib/hooks/useSupabase'
 
 interface Task {
   task_id: string;
@@ -56,6 +57,7 @@ interface SearchResult {
 
 export function GlobalSearch() {
   const { user } = useAuthStore()
+  const { supabase } = useSupabase()
   const router = useRouter()
   const [isOpen, setIsOpen] = useState(false)
   const [query, setQuery] = useState('')
@@ -137,7 +139,7 @@ export function GlobalSearch() {
       const lowerQuery = searchQuery.toLowerCase()
 
       // Search tasks
-      const { data: tasks } = await taskService.getUserTasks(user.id)
+      const { data: tasks } = await taskService(supabase).getUserTasks(user.id)
       tasks?.forEach((task: Task) => {
         const title = task.title || ''
         const description = task.description || ''
@@ -159,7 +161,7 @@ export function GlobalSearch() {
       })
 
       // Search goals
-      const { data: goals } = await goalService.getUserGoals(user.id)
+      const { data: goals } = await goalService(supabase).getUserGoals(user.id)
       goals?.forEach((goal: Goal) => {
         const title = goal.title || ''
         const description = goal.description || ''
@@ -180,7 +182,7 @@ export function GlobalSearch() {
       })
 
       // Search habits
-      const { data: habits } = await habitService.getUserHabits(user.id)
+      const { data: habits } = await habitService(supabase).getUserHabits(user.id)
       habits?.forEach((habit: Habit) => {
         const title = habit.title || habit.name || ''
         const description = habit.description || ''
@@ -199,39 +201,37 @@ export function GlobalSearch() {
       })
 
       // Search journal entries
-      const { data: entries } = await journalService.getUserJournalEntries(user.id)
-      entries?.forEach((entry: JournalEntry) => {
+      const { data: journalEntries } = await journalService(supabase).getUserJournalEntries(user.id)
+      journalEntries?.forEach((entry: JournalEntry) => {
         const content = entry.content || ''
         
         if (content.toLowerCase().includes(lowerQuery)) {
           searchResults.push({
             id: entry.entry_id,
-            title: `Journal Entry - ${new Date(entry.created_at || entry.entry_date || Date.now()).toLocaleDateString()}`,
+            title: content.substring(0, 50) + (content.length > 50 ? '...' : ''),
             type: 'journal',
-            description: content.substring(0, 100) + (content.length > 100 ? '...' : ''),
+            description: content,
             mood: entry.mood,
-            date: entry.created_at || entry.entry_date
+            date: entry.entry_date || entry.created_at
           })
         }
       })
 
-      setResults(searchResults.slice(0, 10)) // Limit to 10 results
-      setSelectedIndex(0)
+      setResults(searchResults)
     } catch (error) {
       console.error('Search error:', error)
       setResults([])
     } finally {
       setLoading(false)
     }
-  }, 300))
+  }, 300)).current;
 
+  // Perform search when query changes
   useEffect(() => {
-    if (query.length >= 2) {
-      performSearch.current(query)
-    } else {
-      setResults([])
+    if (isOpen) {
+      performSearch(query)
     }
-  }, [query, performSearch])
+  }, [query, isOpen, performSearch])
 
   const getIcon = (type: string) => {
     switch (type) {

@@ -1,13 +1,13 @@
-import { client } from '../supabase'
 import { Database } from '../../types/supabase'
+import { SupabaseClient } from "@supabase/supabase-js";
 
-export type Habit = Database['public']['Tables']['habits']['Row']
+export type Habit = Database['public']['Tables']['habits']['Row'] & { streak?: number }
 export type HabitCompletion = Database['public']['Tables']['habit_completions']['Row']
 
-export const habitService = {
+export const habitService = (supabase: SupabaseClient<Database>) => ({
   async getUserHabits(userId: string) {
     try {
-      const { data, error } = await client
+      const { data, error } = await supabase
         .from('habits')
         .select('*')
         .eq('user_id', userId)
@@ -23,7 +23,7 @@ export const habitService = {
 
   async createHabit(habit: Partial<Habit> & { user_id: string }) {
     try {
-      const { data, error } = await client
+      const { data, error } = await supabase
         .from('habits')
         .insert(habit)
         .select()
@@ -39,7 +39,7 @@ export const habitService = {
 
   async updateHabit(habitId: string, updates: Partial<Habit>) {
     try {
-      const { data, error } = await client
+      const { data, error } = await supabase
         .from('habits')
         .update(updates)
         .eq('id', habitId)
@@ -56,7 +56,7 @@ export const habitService = {
 
   async deleteHabit(habitId: string) {
     try {
-      const { error } = await client
+      const { error } = await supabase
         .from('habits')
         .delete()
         .eq('id', habitId)
@@ -71,7 +71,7 @@ export const habitService = {
 
   async getHabitCompletions(userId: string, startDate: string, endDate: string) {
     try {
-      const { data, error } = await client
+      const { data, error } = await supabase
         .from('habit_completions')
         .select(`
           *,
@@ -97,7 +97,7 @@ export const habitService = {
 
   async completeHabit(completion: Partial<HabitCompletion> & { user_id: string; habit_id: string }) {
     try {
-      const { data, error } = await client
+      const { data, error } = await supabase
         .from('habit_completions')
         .insert({
           ...completion,
@@ -117,7 +117,7 @@ export const habitService = {
 
   async deleteHabitCompletion(completionId: string) {
     try {
-      const { error } = await client
+      const { error } = await supabase
         .from('habit_completions')
         .delete()
         .eq('id', completionId)
@@ -132,7 +132,7 @@ export const habitService = {
 
   async gethabitstreak(habitId: string, userId: string) {
     try {
-      const { data, error } = await client
+      const { data, error } = await supabase
         .from('habit_completions')
         .select('completion_date')
         .eq('habit_id', habitId)
@@ -145,10 +145,13 @@ export const habitService = {
       if (data && data.length > 0) {
         const today = new Date()
         today.setHours(0, 0, 0, 0)
+        const yesterday = new Date(today)
+        yesterday.setDate(today.getDate() - 1)
+
         let currentDate = new Date(data[0].completion_date)
         currentDate.setHours(0, 0, 0, 0)
 
-        if (currentDate.getTime() === today.getTime()) {
+        if (currentDate.getTime() === today.getTime() || currentDate.getTime() === yesterday.getTime()) {
           streak = 1
           for (let i = 1; i < data.length; i++) {
             const nextDate = new Date(data[i].completion_date)
@@ -174,7 +177,7 @@ export const habitService = {
 
   async getBatchHabitCompletions(userId: string, startDate: string, endDate: string) {
     try {
-      const { data, error } = await client
+      const { data, error } = await supabase
         .from('habit_completions')
         .select(`
           *,
@@ -197,4 +200,4 @@ export const habitService = {
       return { data: null, error }
     }
   }
-} 
+}); 

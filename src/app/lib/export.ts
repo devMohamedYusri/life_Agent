@@ -7,6 +7,8 @@ import { categoryService } from './database/categories';
 import { userService } from './database/users';
 import { jsPDF } from 'jspdf';
 import autoTable, { UserOptions } from 'jspdf-autotable';
+import { SupabaseClient } from "@supabase/supabase-js";
+import { Database } from "../types/supabase";
 
 declare module 'jspdf' {
   interface jsPDF {
@@ -20,11 +22,12 @@ declare module 'jspdf' {
 // Define types for the data structures
 export interface Task {
   id: string;
+  user_id: string;
   title: string;
   description?: string;
   status: string;
   priority: string;
-  due_date?: string;
+  due_date?: string | null;
   category?: string;
   goal?: string;
 }
@@ -35,7 +38,7 @@ export interface Goal {
   description?: string;
   status: string;
   progress?: number;
-  deadline?: string;
+  deadline?: string | null;
   category?: string;
 }
 
@@ -44,7 +47,7 @@ export interface Habit {
   title: string;
   description?: string;
   frequency: string;
-  reminder_time?: string;
+  reminder_time?: string | null;
   target_count?: number;
   streak?: number;
 }
@@ -64,7 +67,7 @@ export interface JournalEntry {
 //   color?: string;
 // }
 
-export const exportService = {
+export const exportService = (supabase: SupabaseClient<Database>) => ({
   async exportToJSON(userId: string) {
     try {
       // Gather all user data
@@ -76,12 +79,12 @@ export const exportService = {
         { data: categories },
         { data: userStats }
       ] = await Promise.all([
-        taskService.getUserTasks(userId),
-        goalService.getUserGoals(userId),
-        habitService.getUserHabits(userId),
-        journalService.getUserJournalEntries(userId),
-        categoryService.getUserCategories(userId),
-        userService.getUserStats(userId)
+        taskService(supabase).getUserTasks(userId),
+        goalService(supabase).getUserGoals(userId),
+        habitService(supabase).getUserHabits(userId),
+        journalService(supabase).getUserJournalEntries(userId),
+        categoryService(supabase).getUserCategories(userId),
+        userService(supabase).getUserStats(userId)
       ]);
 
       const exportData = {
@@ -123,25 +126,25 @@ export const exportService = {
 
       switch (type) {
         case 'tasks':
-          const { data: tasks } = await taskService.getUserTasks(userId);
+          const { data: tasks } = await taskService(supabase).getUserTasks(userId);
           data = tasks ?? [];
           headers = ['ID', 'Title', 'Description', 'Status', 'Priority', 'Due Date', 'Category', 'Goal'];
           filename = 'tasks';
           break;
         case 'goals':
-          const { data: goals } = await goalService.getUserGoals(userId);
+          const { data: goals } = await goalService(supabase).getUserGoals(userId);
           data = goals ?? [];
           headers = ['ID', 'Title', 'Description', 'Status', 'Progress', 'Deadline', 'Category'];
           filename = 'goals';
           break;
         case 'habits':
-          const { data: habits } = await habitService.getUserHabits(userId);
+          const { data: habits } = await habitService(supabase).getUserHabits(userId);
           data = habits ?? [];
           headers = ['ID', 'Title', 'Description', 'Frequency', 'Reminder Time', 'Target Count'];
           filename = 'habits';
           break;
         case 'journal':
-          const { data: entries } = await journalService.getUserJournalEntries(userId);
+          const { data: entries } = await journalService(supabase).getUserJournalEntries(userId);
           data = entries ?? [];
           headers = ['ID', 'Date', 'Content', 'Mood', 'Tags'];
           filename = 'journal';
@@ -194,7 +197,7 @@ export const exportService = {
       // Import data in sequence to maintain referential integrity
       if (categories) {
         for (const category of categories) {
-          await categoryService.createCategory({
+          await categoryService(supabase).createCategory({
             user_id: userId,
             ...category
           });
@@ -203,7 +206,7 @@ export const exportService = {
 
       if (goals) {
         for (const goal of goals) {
-          await goalService.createGoal({
+          await goalService(supabase).createGoal({
             user_id: userId,
             ...goal
           });
@@ -212,7 +215,7 @@ export const exportService = {
 
       if (tasks) {
         for (const task of tasks) {
-          await taskService.createTask({
+          await taskService(supabase).createTask({
             user_id: userId,
             ...task
           });
@@ -221,7 +224,7 @@ export const exportService = {
 
       if (habits) {
         for (const habit of habits) {
-          await habitService.createHabit({
+          await habitService(supabase).createHabit({
             user_id: userId,
             ...habit
           });
@@ -230,7 +233,7 @@ export const exportService = {
 
       if (journalEntries) {
         for (const entry of journalEntries) {
-          await journalService.createJournalEntry({
+          await journalService(supabase).createJournalEntry({
             user_id: userId,
             ...entry
           });
@@ -254,10 +257,10 @@ export const exportService = {
         { data: journalEntries },
         // Removed userStats since it's not used
       ] = await Promise.all([
-        taskService.getUserTasks(userId),
-        goalService.getUserGoals(userId),
-        habitService.getUserHabits(userId),
-        journalService.getUserJournalEntries(userId),
+        taskService(supabase).getUserTasks(userId),
+        goalService(supabase).getUserGoals(userId),
+        habitService(supabase).getUserHabits(userId),
+        journalService(supabase).getUserJournalEntries(userId),
       ]);
 
       // Create PDF document with proper configuration for browser
@@ -459,4 +462,4 @@ export const exportService = {
       return { success: false, error };
     }
   }
-};
+});

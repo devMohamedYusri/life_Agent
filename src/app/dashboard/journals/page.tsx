@@ -3,6 +3,7 @@ import { useState, useEffect, useCallback } from 'react'
 import { useAuthStore } from '../../lib/stores/authStore'
 import { journalService } from '../../lib/database/journal'
 import { useUserTimeZone } from '../../lib/hooks/useUserTimeZone'
+import { useSupabase } from '../../lib/hooks/useSupabase'
 
 interface JournalEntry {
   entry_id: string
@@ -24,6 +25,7 @@ const MOODS = [
 
 export default function JournalPage() {
   const { user } = useAuthStore()
+  const { supabase } = useSupabase()
   const { formatDate, formatTime } = useUserTimeZone();
   const [entries, setEntries] = useState<JournalEntry[]>([])
   const [loading, setLoading] = useState(true)
@@ -44,7 +46,7 @@ export default function JournalPage() {
     
     try {
       setLoading(true)
-      const { data, error } = await journalService.getUserJournalEntries(user.id)
+      const { data, error } = await journalService(supabase).getUserJournalEntries(user.id)
       
       if (error) {
         console.error('Error loading entries:', error)
@@ -56,7 +58,7 @@ export default function JournalPage() {
     } finally {
       setLoading(false)
     }
-  }, [user?.id])
+  }, [user?.id, supabase])
 
   useEffect(() => {
     loadEntries()
@@ -74,7 +76,7 @@ export default function JournalPage() {
         is_ai_prompted: false
       }
       
-      const { error } = await journalService.createJournalEntry(entryData)
+      const { error } = await journalService(supabase).createJournalEntry(entryData)
       
       if (!error) {
         await loadEntries()
@@ -96,7 +98,7 @@ export default function JournalPage() {
     if (!window.confirm('Are you sure you want to delete this entry?')) return
     
     try {
-      await journalService.deleteJournalEntry(entryId)
+      await journalService(supabase).deleteJournalEntry(entryId)
       await loadEntries()
     } catch (error) {
       console.error('Error deleting entry:', error)

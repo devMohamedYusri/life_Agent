@@ -1,24 +1,24 @@
 import { NextResponse } from 'next/server';
-import { client } from '../../../lib/supabase';
-import { notificationService } from '../../../lib/database/notifications';
+import { client } from '@//lib/supabase';
+import { notificationService } from '@//lib/database/notifications';
 // import { Task } from '../../../lib/database/tasks';
 
 // Helper function to get all active users
 async function getActiveUserIds(): Promise<string[]> {
   const { data, error } = await client
-    .from('user_profiles')
-    .select('id');
-  if (error) {
-    console.error('Error fetching active users:', error);
-    return [];
-  }
-  return data.map(profile => profile.id);
+    .from('users')
+    .select('id')
+    .eq('status', 'active');
+
+  if (error) throw error;
+  return data.map(user => user.id);
 }
 
 export async function GET() {
   try {
     const userIds = await getActiveUserIds();
     let notificationsCreated = 0;
+    const notifications = notificationService(client);
 
     for (const userId of userIds) {
       // --- 1. Overdue Tasks Notification ---
@@ -32,7 +32,7 @@ export async function GET() {
       if (overdueTasks && overdueTasks.length > 0) {
         // To avoid spam, we'll only send one overdue notice per run if they haven't been notified recently.
         // For a real app, you'd check the last notification time. For now, we'll just send it.
-        await notificationService.create({
+        await notifications.create({
           user_id: userId,
           type: 'task_reminder',
           title: 'You have overdue tasks!',
@@ -54,7 +54,7 @@ export async function GET() {
 
       if (dueSoonTasks && dueSoonTasks.length > 0) {
         for (const task of dueSoonTasks) {
-            await notificationService.create({
+            await notifications.create({
                 user_id: userId,
                 type: 'task_reminder',
                 title: 'Task Due Soon',
@@ -83,7 +83,7 @@ export async function GET() {
 
       if (todayTasks && todayTasks.length > 0) {
           // You would add logic here to only send this once per day.
-          await notificationService.create({
+          await notifications.create({
               user_id: userId,
               type: 'task_reminder',
               title: 'Your Daily Summary',

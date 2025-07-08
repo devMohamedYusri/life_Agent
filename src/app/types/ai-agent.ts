@@ -18,12 +18,12 @@ export interface AISuggestion {
   targetDate?: string; // For goals (ISO string format expected), replaces deadline
   progress?: number; // For goals
   goalType?: string; // For goals (e.g., "long-term", "short-term"), replaces goal_type
-  status?: 'pending' | 'in-progress' | 'completed' | 'archived'; // For goals and tasks
+  status?: 'pending' | 'in-progress' | 'completed' | 'archived' | 'active' | 'paused' | 'cancelled'; // For goals, tasks, and habits, including new statuses
 
   // Optional fields for journal entries
   entry_date?: string; // For journal entries
   mood?: string; // For journal entries
-  tags?: string[]; // For journal entries
+  tags?: string[] | string; // For journal entries
 
   // Fields for UI state
   decisionStatus?: 'pending' | 'accepted' | 'rejected';
@@ -32,6 +32,8 @@ export interface AISuggestion {
 
   // For complex goals/plans, nested suggestions
   subSuggestions?: AISuggestion[];
+  relatedGoalId?: string;
+  relatedHabitId?: string;
 }
 
 export interface AIInsight {
@@ -52,24 +54,31 @@ export interface AIFeedback {
 }
 
 export interface AIContext {
-  recentTasks: {
+  recentTasks?: {
     id: string;
     title: string;
     completed: boolean;
     dueDate?: string;
   }[];
-  recentHabits: {
+  recentHabits?: {
     id: string;
     name: string;
     streak: number;
     frequency: string;
   }[];
-  recentGoals: {
+  recentGoals?: {
     id: string;
     title: string;
     progress: number;
     targetDate?: string;
   }[];
+  recentJournalEntries?: {
+    id: string;
+    content: string;
+    mood?: string;
+    entry_date: string;
+  }[];
+  recentMessages?: { role: string; content: string; }[];
 }
 
 export interface Task {

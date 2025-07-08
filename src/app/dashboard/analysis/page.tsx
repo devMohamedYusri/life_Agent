@@ -1,11 +1,13 @@
 "use client";
 import { useState, useEffect } from "react";
 import { useAuthStore } from "../../lib/stores/authStore";
+import { useSupabase } from "../../lib/hooks/useSupabase";
 import { journalService } from "../../lib/database/journal";
 import { taskService } from "../../lib/database/tasks";
 import { goalService } from "../../lib/database/goals";
 import { habitService } from "../../lib/database/habits";
 import { exportService } from '../../lib/export';
+import type { ExportService } from '../../types/supabase';
 
 interface Stats {
   totalGoals: number;
@@ -41,6 +43,7 @@ interface HabitStreak {
 
 export default function AnalysisPage() {
   const { user } = useAuthStore();
+  const { supabase } = useSupabase();
   const [stats, setStats] = useState<Stats | null>(null);
   const [moodData, setMoodData] = useState<MoodData>({});
   const [weeklyTaskData, setWeeklyTaskData] = useState<WeeklyTaskData[]>([]);
@@ -72,9 +75,9 @@ export default function AnalysisPage() {
 
         // Load all data concurrently
         const [{ data: allTasks }, { data: goals }, { data: habits }] = await Promise.all([
-          taskService.getUserTasks(user.id),
-          goalService.getUserGoals(user.id),
-          habitService.getUserHabits(user.id),
+          taskService(supabase).getUserTasks(user.id),
+          goalService(supabase).getUserGoals(user.id),
+          habitService(supabase).getUserHabits(user.id),
         ]);
 
         if (!goals || !mounted) {
@@ -103,7 +106,7 @@ export default function AnalysisPage() {
         }
 
         // Load mood statistics
-        const { data: moodStats } = await journalService.getMoodStats(
+        const { data: moodStats } = await journalService(supabase).getMoodStats(
           user.id,
           startDate.toISOString().split("T")[0],
           new Date().toISOString().split("T")[0]
@@ -181,7 +184,7 @@ export default function AnalysisPage() {
             const endDate = dates[dates.length - 1];
             
             const { data: allCompletions } = 
-              await habitService.getBatchHabitCompletions(user.id, startDate, endDate);
+              await habitService(supabase).getBatchHabitCompletions(user.id, startDate, endDate);
             
             if (allCompletions && mounted) {
               // Create a map for quick lookup
@@ -405,7 +408,7 @@ export default function AnalysisPage() {
                 <div className="flex-1 mx-4">
                   <div className="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-4">
                     <div
-                      className="bg-green-500 dark:bg-green-400 h-4 rounded-full"
+                      className="bg-green-500 dark:bg-emerald-500 h-4 rounded-full"
                       style={{
                         width: `${day.total > 0 ? (day.is_completed / day.total) * 100 : 0}%`,
                       }}
@@ -566,7 +569,8 @@ export default function AnalysisPage() {
             <button
               onClick={async () => {
                 try {
-                  await exportService.exportToCSV(user!.id, 'tasks');
+                  const service: ExportService = exportService(supabase);
+                  await service.exportToCSV(user!.id, 'tasks');
                 } catch (error) {
                   console.error('Error exporting CSV:', error);
                 }
@@ -578,7 +582,8 @@ export default function AnalysisPage() {
             <button
               onClick={async () => {
                 try {
-                  await exportService.exportToPDF(user!.id);
+                  const service: ExportService = exportService(supabase);
+                  await service.exportToPDF(user!.id);
                 } catch (error) {
                   console.error('Error generating PDF:', error);
                 }

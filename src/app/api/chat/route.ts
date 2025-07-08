@@ -5,6 +5,10 @@ import { Task, Goal, Habit, JournalEntry } from '../../lib/export';
 const GROQ_API_KEY = process.env.GROQ_API_KEY;
 const GROQ_API_URL = 'https://api.groq.com/openai/v1/chat/completions';
 
+if (!GROQ_API_KEY) {
+    throw new Error("GROQ_API_KEY is not set in environment variables");
+}
+
 interface ChatMessage {
     role: string;
     content: string;
@@ -19,50 +23,89 @@ interface ChatContext {
 }
 
 async function tryModel(model: string, message: string, context: ChatContext,) {
-    // Updated system prompt with multi-item handling instructions
     const systemPrompt = `Updated AI Personal Assistant System Prompt
-You are an AI Personal Assistant that functions as a backend service. Your primary role is to immediately create tasks, goals, habits, and journal entries upon user request.
-
-CRITICAL MULTI-ITEM HANDLING RULES:
-1. When creating multiple items (e.g., "add these three tasks"), output ALL items as a JSON ARRAY
-2. NEVER split a single item across messages - each suggestion must be complete
-3. If you can't send all items at once, send COMPLETE items first and indicate more will follow
-4. When sending partial responses, include ONLY FULLY COMPLETE items
-
-Item creation structure:
-1. Conversational Commentary: Friendly message about the items
-2. Structured Data Block: JSON inside ############ delimiters
-
-JSON OUTPUT RULES:
-- Use EXACT PascalCase keys
-- ALWAYS include "type" ("habit", "goal", "task", "journal")
-- ALWAYS include "decision" ("null")
-- For multiple items: OUTPUT AS JSON ARRAY
-- For single item: OUTPUT AS SINGLE JSON OBJECT
-- use exact camelCase for keys
--CRITICAL DATE FORMATTING RULES:
-1. ALL dates MUST be formatted in ISO 8601 with timezone: "YYYY-MM-DDTHH:mm:ss+00:00"
-2. Examples of valid formats:
-   - "2025-06-20T08:04:00+00:00" (correct)
-   - "2025-06-20" (incorrect - missing time and timezone)
-   - "June 20, 2025" (incorrect - wrong format)
-3. This applies to ALL date fields including:
-   - DueDate
-   - Deadline
-   - ReminderTime
-   - EntryDate
-   - Any other date/time fields
--follow the same format for the recent tasks ,goals ,habits ,journal entries 
-EXAMPLE MULTI-ITEM OUTPUT:
-############
-[
-  {
-  },
-  {
-  }
-]
-############
-`;
+    You are an AI Personal Assistant that functions as a backend service. Your primary role is to immediately create tasks, goals, habits, and journal entries upon user request.
+    
+    IMPORTANT: DON'T CREATE ANYTHING UNLESS THE USER ASKED FOR IT AND DON'T INCLUDE THE JSON STRUCTURE IN THE THINKING SECTION. DON'T SEND ANY USER ID OR SENSITIVE DATA.
+    
+    CRITICAL OUTPUT FORMAT:
+    1. Conversational Commentary: Friendly message about the items
+    2. Structured Data Block: JSON wrapped EXACTLY between ############ delimiters (12 hashes)
+    
+    JSON STRUCTURE REQUIREMENTS:
+    - STRICT PascalCase for ALL keys (first letter uppercase)
+    - Required fields for ALL item types:
+      * "Type": string ("habit", "goal", "task", or "journal")
+      * "Decision": null (as actual null value, NOT "null" string)
+      * Date fields in ISO 8601 with timezone: "YYYY-MM-DDTHH:mm:ss+00:00"
+    
+    FIELD NAMING CONVENTIONS (MUST USE EXACT CASING):
+    Goals:
+    - "GoalId": string
+    - "Title": string
+    - "Description": string
+    - "Type": "goal"
+    - "Decision": null
+    - "EntryDate": ISO 8601 date
+    - "Deadline": ISO 8601 date or null
+    
+    Tasks:
+    - "TaskId": string
+    - "Title": string
+    - "Description": string
+    - "Type": "task"
+    - "Decision": null
+    - "DueDate": ISO 8601 date or null
+    - "Priority": string ("high", "medium", "low")
+    - "Status": string ("pending", "in_progress", "completed")
+    - "GoalId": string or null (for linking to goals)
+    
+    Habits:
+    - "HabitId": string
+    - "Title": string
+    - "Description": string
+    - "Type": "habit"
+    - "Decision": null
+    - "Frequency": string
+    - "ReminderTime": ISO 8601 date or null
+    
+    Journal Entries:
+    - "JournalId": string
+    - "Title": string
+    - "Content": string
+    - "Type": "journal"
+    - "Decision": null
+    - "EntryDate": ISO 8601 date
+    - "Mood": string or null
+    
+    OUTPUT RULES:
+    - Single item: Output as single JSON object
+    - Multiple items: Output as JSON array
+    - ALWAYS wrap JSON in exactly 12 hashes on each side
+    - NO quotes around null values
+    - NO trailing commas
+    
+    EXAMPLE SINGLE ITEM:
+    
+    ############
+    {
+      
+    }
+    ############
+    
+    EXAMPLE MULTIPLE ITEMS:
+    I'll create those three tasks for you.
+    
+    ############
+    [
+      {
+      
+      },
+      {
+        
+      }
+    ]
+    ############`;
 
     // Prepare messages array with system message and chat history
     const messages = [
@@ -121,7 +164,7 @@ User Message: ${message}`
 
     const data = await response.json();
     const content = data.choices[0]?.message?.content || '';
-    console.log("data is : ",data,"\ncontent : ",content)
+    // console.log("data is : ",data,"\ncontent : ",content)
     // Extract JSON block
     let suggestions = [];
     let conversationalContent = content;
@@ -150,7 +193,7 @@ User Message: ${message}`
             // Parse and normalize to array
             const parsed = JSON.parse(pureJson);
             suggestions = Array.isArray(parsed) ? parsed : [parsed];
-            console.log('JSON returned:', suggestions);
+            // console.log('JSON returned:', suggestions);
         } catch (e) {
             console.error('JSON parsing error:', e);
         }

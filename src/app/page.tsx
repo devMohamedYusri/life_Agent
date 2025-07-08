@@ -7,12 +7,6 @@ export default function Home() {
   const { user, initialized } = useAuthStore();
   const router = useRouter();
 
-  // Immediate redirect if user is logged in and auth is initialized
-  if (initialized && user) {
-    router.replace('/dashboard');
-    return null; // Return null to prevent rendering the home page content
-  }
-
   return (
     <div className="min-h-screen bg-gradient-to-br from-purple-900 via-blue-900 to-indigo-900 text-white">
       {/* Hero Section */}

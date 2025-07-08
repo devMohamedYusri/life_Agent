@@ -7,6 +7,7 @@ import { taskService } from '../../lib/database/tasks'
 import { goalService } from '../../lib/database/goals'
 import { habitService } from '../../lib/database/habits'
 import { journalService } from '../../lib/database/journal'
+import { useSupabase } from '../../lib/hooks/useSupabase'
 import { 
   ChevronLeft, 
   ChevronRight, 
@@ -76,6 +77,7 @@ const MONTHS = [
 
 export default function CalendarPage() {
   const { user } = useAuthStore()
+  const { supabase } = useSupabase()
   const [currentDate, setCurrentDate] = useState(new Date())
   const [selectedDate, setSelectedDate] = useState<Date | null>(null)
   const [events, setEvents] = useState<DayEvents>({})
@@ -100,16 +102,16 @@ export default function CalendarPage() {
       const promises = []
 
       if (filters.tasks) {
-        promises.push(taskService.getUserTasks(user.id))
+        promises.push(taskService(supabase).getUserTasks(user.id))
       }
       if (filters.goals) {
-        promises.push(goalService.getUserGoals(user.id))
+        promises.push(goalService(supabase).getUserGoals(user.id))
       }
       if (filters.habits) {
-        promises.push(habitService.getUserHabits(user.id))
+        promises.push(habitService(supabase).getUserHabits(user.id))
       }
       if (filters.journal) {
-        promises.push(journalService.getUserJournalEntries(user.id))
+        promises.push(journalService(supabase).getUserJournalEntries(user.id))
       }
 
       const results = await Promise.all(promises)
@@ -195,7 +197,7 @@ export default function CalendarPage() {
     } finally {
       setLoading(false)
     }
-  }, [user?.id, filters])
+  }, [user?.id, filters, supabase])
 
   useEffect(() => {
     loadCalendarEvents()

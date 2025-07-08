@@ -1,5 +1,6 @@
 // lib/database/notifications.ts
-import { client } from '../supabase'
+import { SupabaseClient } from '@supabase/supabase-js'
+import { Database } from '../../types/supabase'
 
 interface CustomNotificationOptions extends NotificationOptions {
   vibrate?: number[];
@@ -68,10 +69,10 @@ interface NotificationSettings {
   browserNotifications: boolean;
 }
 
-export const notificationService = {
+export const notificationService = (supabase: SupabaseClient<Database>) => ({
   // Create a notification
   async create(notification: Partial<Notification> & { user_id: string }) {
-    const { data, error } = await client
+    const { data, error } = await supabase
       .from('notifications')
       .insert({
         ...notification,
@@ -87,7 +88,7 @@ export const notificationService = {
 
   // Get all notifications for a user
   async getAll(userId: string) {
-    const { data, error } = await client
+    const { data, error } = await supabase
       .from('notifications')
       .select('*')
       .eq('user_id', userId)
@@ -99,7 +100,7 @@ export const notificationService = {
 
   // Get upcoming notifications
   async getUpcoming(userId: string) {
-    const { data, error } = await client
+    const { data, error } = await supabase
       .from('notifications')
       .select('*')
       .eq('user_id', userId)
@@ -114,7 +115,7 @@ export const notificationService = {
 
   // Get unread notifications
   async getUnread(userId: string) {
-    const { data, error } = await client
+    const { data, error } = await supabase
       .from('notifications')
       .select('*')
       .eq('user_id', userId)
@@ -127,7 +128,7 @@ export const notificationService = {
 
   // Mark notification as read
   async markAsRead(notificationId: string) {
-    const { data, error } = await client
+    const { data, error } = await supabase
       .from('notifications')
       .update({ 
         status: 'read', 
@@ -143,7 +144,7 @@ export const notificationService = {
 
   // Mark all as read
   async markAllAsRead(userId: string) {
-    const { error } = await client
+    const { error } = await supabase
       .from('notifications')
       .update({ 
         status: 'read', 
@@ -155,19 +156,21 @@ export const notificationService = {
     if (error) throw error
     return { error: null }
   },
-// Add this method to your notificationService object
-async getById(notificationId: string) {
-  const { data, error } = await client
-    .from('notifications')
-    .select('*')
-    .eq('id', notificationId)
-    .single();
-  
-  return { data, error };
-},
+
+  // Get notification by ID
+  async getById(notificationId: string) {
+    const { data, error } = await supabase
+      .from('notifications')
+      .select('*')
+      .eq('id', notificationId)
+      .single();
+    
+    return { data, error };
+  },
+
   // Delete notification
   async delete(notificationId: string) {
-    const { error } = await client
+    const { error } = await supabase
       .from('notifications')
       .delete()
       .eq('id', notificationId)
@@ -201,8 +204,8 @@ async getById(notificationId: string) {
       type: 'habit_reminder',
       entity_id: habitId,
       entity_type: 'habit',
-      title: 'Habit Check-in',
-      message: `Time to check in: ${habit.name}`,
+      title: 'Habit Reminder',
+      message: `Time to practice: ${habit.name}`,
       scheduled_for: reminderTime.toISOString(),
       metadata: {
         habit_name: habit.name,
@@ -219,7 +222,7 @@ async getById(notificationId: string) {
       entity_id: goalId,
       entity_type: 'goal',
       title: 'Goal Deadline Approaching',
-      message: `Your goal "${goal.title}" deadline is approaching`,
+      message: `Your goal "${goal.title}" deadline is approaching.`,
       scheduled_for: reminderTime.toISOString(),
       metadata: {
         goal_title: goal.title,
@@ -230,14 +233,72 @@ async getById(notificationId: string) {
 
   // Update notification settings
   async updateSettings(userId: string, settings: NotificationSettings) {
-    const { error } = await client
-      .from('notification_settings')
-      .upsert({ user_id: userId, ...settings })
+    // First check if settings exist
+    const { data: existingSettings } = await supabase
+      .from('user_preferences')
+      .select('*')
+      .eq('id', userId)
+      .single();
 
-    if (error) throw error
-    return { error: null }
+    if (!existingSettings) {
+      // Create new settings
+      const { data, error } = await supabase
+        .from('user_preferences')
+        .insert([{
+          id: userId,
+          notification_settings: settings,
+          updated_at: new Date().toISOString()
+        }])
+        .select()
+        .single();
+
+      if (error) throw error;
+      return { data, error: null };
+    }
+
+    // Update existing settings
+    const { data, error } = await supabase
+      .from('user_preferences')
+      .update({
+        notification_settings: settings,
+        updated_at: new Date().toISOString()
+      })
+      .eq('id', userId)
+      .select()
+      .single();
+
+    if (error) throw error;
+    return { data, error: null };
+  },
+
+  // Get notification settings
+  async getSettings(userId: string) {
+    const { data, error } = await supabase
+      .from('user_preferences')
+      .select('notification_settings')
+      .eq('id', userId)
+      .single();
+
+    if (error) throw error;
+
+    // Return default settings if none exist
+    if (!data) {
+      return {
+        data: {
+          emailReminders: true,
+          taskDeadlines: true,
+          dailyDigest: false,
+          weeklyReport: true,
+          habitReminders: true,
+          browserNotifications: false
+        },
+        error: null
+      };
+    }
+
+    return { data: data.notification_settings, error: null };
   }
-}
+})
 
 // Browser notification functionality
 export class BrowserNotificationService {
@@ -307,63 +368,67 @@ export class BrowserNotificationService {
 }
 
 // Integrated notification manager
-export const NotificationManager = {
-  // Check and show browser notifications for upcoming events
-  async checkAndShowNotifications(userId: string) {
-    try {
-      const { data: notifications } = await notificationService.getUpcoming(userId)
-      
-      if (!notifications) return
-
-      notifications.forEach((notification: Notification) => {
-        const timeDiff = notification.scheduled_for 
-          ? new Date(notification.scheduled_for).getTime() - Date.now()
-          : 0
+export const createNotificationManager = (supabase: SupabaseClient<Database>) => {
+  const notificationSvc = notificationService(supabase)
+  
+  return {
+    // Check and show browser notifications for upcoming events
+    async checkAndShowNotifications(userId: string) {
+      try {
+        const { data: upcomingNotifications } = await notificationSvc.getUpcoming(userId)
         
-        if (timeDiff > 0 && timeDiff < 3600000) { // Within 1 hour
-          BrowserNotificationService.scheduleNotification(
-            notification.title,
-            {
-              body: notification.message,
-              tag: notification.id,
-              data: notification
-            },
-            timeDiff
-          )
-        }
-      })
-    } catch (error) {
-      console.error('Error checking notifications:', error)
-    }
-  },
+        if (!upcomingNotifications) return
 
-  // Create and optionally show a notification immediately
-  async createAndShow(notification: Partial<Notification> & { user_id: string }, showNow = false) {
-    const { data } = await notificationService.create(notification)
-    
-    if (data && showNow) {
-      await BrowserNotificationService.showFromDatabaseNotification(data)
-    }
-    
-    return data
-  },
+        upcomingNotifications.forEach((notification: Notification) => {
+          const timeDiff = notification.scheduled_for 
+            ? new Date(notification.scheduled_for).getTime() - Date.now()
+            : 0
+          
+          if (timeDiff > 0 && timeDiff < 3600000) { // Within 1 hour
+            BrowserNotificationService.scheduleNotification(
+              notification.title,
+              {
+                body: notification.message,
+                tag: notification.id,
+                data: notification
+              },
+              timeDiff
+            )
+          }
+        })
+      } catch (error) {
+        console.error('Error checking notifications:', error)
+      }
+    },
 
-  // Get notification count for badge
-  async getUnreadCount(userId: string): Promise<number> {
-    try {
-      const { data } = await notificationService.getUnread(userId)
-      return data?.length || 0
-    } catch (error) {
-      console.error('Error getting notification count:', error)
-      return 0
+    // Create and optionally show a notification immediately
+    async createAndShow(notification: Partial<Notification> & { user_id: string }, showNow = false) {
+      const { data } = await notificationSvc.create(notification)
+      
+      if (data && showNow) {
+        await BrowserNotificationService.showFromDatabaseNotification(data)
+      }
+      
+      return data
+    },
+
+    // Get notification count for badge
+    async getUnreadCount(userId: string): Promise<number> {
+      try {
+        const { data } = await notificationSvc.getUnread(userId)
+        return data?.length || 0
+      } catch (error) {
+        console.error('Error getting notification count:', error)
+        return 0
+      }
     }
   }
 }
 
-export async function createNotification(notification: NotificationPayload) {
+export async function createNotification(notification: NotificationPayload, supabase: SupabaseClient<Database>) {
   let data: NotificationPayload;
   try {
-    const { data: result, error } = await client
+    const { data: result, error } = await supabase
       .from('notifications')
       .insert(notification)
       .select()

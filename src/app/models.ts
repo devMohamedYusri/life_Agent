@@ -35,6 +35,7 @@
 // ];
 
 const models = [
+  'deepseek-r1-distill-llama-70b',
   'llama-3.3-70b-versatile',
   'gemma2-9b-it',
   'llama-3.1-8b-instant',

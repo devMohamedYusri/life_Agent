@@ -1,8 +1,9 @@
 "use client";
 import { useState, useEffect, useCallback } from "react";
 import { useAuthStore } from "../../lib/stores/authStore";
-import { habitService } from "../../lib/database/habits";
-import { categoryService } from "../../lib/database/categories";
+import { habitService, Habit, HabitCompletion } from "../../lib/database/habits";
+import { categoryService, Category } from "../../lib/database/categories";
+import { useSupabase } from "../../lib/hooks/useSupabase";
 import {
   Edit2,
   Trash2,
@@ -16,19 +17,11 @@ import {
   Bell,
   MoreVertical,
 } from "lucide-react";
-import { Habit, HabitCompletion } from "@//lib/database/habits";
 
 interface HabitStats {
   completionCount: number;
   streak: number;
   completionRate: number;
-}
-
-interface Category {
-  category_id: string;
-  name: string;
-  color: string;
-  icon: string;
 }
 
 // interface HabitLog {
@@ -51,6 +44,7 @@ interface FormData {
 
 export default function HabitsPage() {
   const { user } = useAuthStore();
+  const { supabase } = useSupabase();
   const [habits, setHabits] = useState<Habit[]>([]);
   const [categories, setCategories] = useState<Category[]>([]);
   const [completions, setCompletions] = useState<{ [key: string]: boolean }>({});
@@ -82,8 +76,8 @@ export default function HabitsPage() {
       setLoading(true);
 
       // Load habits and categories
-      const { data: habitsData } = await habitService.getUserHabits(user.id);
-      const { data: categoriesData } = await categoryService.getUserCategories(user.id);
+      const { data: habitsData } = await habitService(supabase).getUserHabits(user.id);
+      const { data: categoriesData } = await categoryService(supabase).getUserCategories(user.id);
 
       setHabits(habitsData || []);
       setCategories(categoriesData || []);
@@ -106,14 +100,14 @@ export default function HabitsPage() {
       const endOfPeriod = new Date(startOfPeriod);
       endOfPeriod.setDate(startOfPeriod.getDate() + 1);
 
-      const { data: completionsData } = await habitService.getHabitCompletions(
+      const { data: completionsData } = await habitService(supabase).getHabitCompletions(
         user.id,
         startOfPeriod.toISOString(),
         endOfPeriod.toISOString()
       );
 
-      const completedHabits = completionsData?.map(c => c.habit_id) || [];
-      setCompletions(completedHabits.reduce((acc, id) => ({ ...acc, [id]: true }), {}));
+      const completedHabits = (completionsData || []).map((c: HabitCompletion) => c.habit_id);
+      setCompletions(completedHabits.reduce((acc: Record<string, boolean>, id: string) => ({ ...acc, [id]: true }), {}));
 
       // Calculate stats
       const stats: { [key: string]: HabitStats } = {};
@@ -126,7 +120,7 @@ export default function HabitsPage() {
     } finally {
       setLoading(false);
     }
-  }, [user]);
+  }, [user, supabase]);
 
   useEffect(() => {
     if (user) {
@@ -156,7 +150,7 @@ export default function HabitsPage() {
         const endOfPeriod = new Date(startOfPeriod);
         endOfPeriod.setDate(startOfPeriod.getDate() + 1);
 
-        const { data: todayCompletions } = await habitService.getHabitCompletions(
+        const { data: todayCompletions } = await habitService(supabase).getHabitCompletions(
           user.id,
           startOfPeriod.toISOString(),
           endOfPeriod.toISOString()
@@ -164,10 +158,10 @@ export default function HabitsPage() {
 
         const completion = todayCompletions?.find(c => c.habit_id === habitId);
         if (completion) {
-          await habitService.deleteHabitCompletion(completion.completion_id);
+          await habitService(supabase).deleteHabitCompletion(completion.completion_id);
         }
       } else {
-        await habitService.completeHabit({
+        await habitService(supabase).completeHabit({
           user_id: user.id,
           habit_id: habitId
         });
@@ -184,7 +178,7 @@ export default function HabitsPage() {
       const thirtyDaysAgo = new Date();
       thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
       
-      const { data: completions } = await habitService.getHabitCompletions(
+      const { data: completions } = await habitService(supabase).getHabitCompletions(
         user.id,
         thirtyDaysAgo.toISOString(),
         new Date().toISOString()
@@ -249,52 +243,41 @@ export default function HabitsPage() {
         reminder_time: formData.reminder_time || null,
         category_id: formData.category_id || null,
       };
-
-      const { error } = await habitService.createHabit(habitData);
-
+      
+      const { error } = await habitService(supabase).createHabit(habitData);
+      
       if (!error) {
         await loadHabits();
         setShowCreateModal(false);
         resetForm();
-      } else {
-        alert(`Error creating habit: ${error}`);
       }
     } catch (error) {
-      console.error("Error creating habit:", error);
-      alert("Failed to create habit. Please try again.");
+      console.error('Error creating habit:', error);
     }
   };
 
   const handleEditHabit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!editingHabit) return;
+    if (!user || !editingHabit) return;
 
     try {
-      const updates = {
-        title: formData.title,
-        description: formData.description,
+      const habitData = {
+        ...formData,
+        user_id: user.id,
         reminder_time: formData.reminder_time || null,
-        frequency: formData.frequency,
-        target_count: formData.target_count,
         category_id: formData.category_id || null,
       };
-
-      const { error } = await habitService.updateHabit(
-        editingHabit.habit_id,
-        updates
-      );
-
+      
+      const { error } = await habitService(supabase).updateHabit(editingHabit.habit_id, habitData);
+      
       if (!error) {
         await loadHabits();
         setShowEditModal(false);
         setEditingHabit(null);
         resetForm();
-      } else {
-        alert(`Error updating habit: ${error}`);
       }
     } catch (error) {
-      console.error("Error updating habit:", error);
-      alert("Failed to update habit. Please try again.");
+      console.error('Error updating habit:', error);
     }
   };
 
@@ -324,23 +307,14 @@ export default function HabitsPage() {
   };
 
   const deleteHabit = async (habitId: string) => {
-    if (
-      !window.confirm(
-        "Are you sure you want to delete this habit? This will also delete all completion history."
-      )
-    )
-      return;
-
+    if (!window.confirm('Are you sure you want to delete this habit?')) return;
+    
     try {
-      const { error } = await habitService.deleteHabit(habitId);
-      if (!error) {
-        await loadHabits();
-      } else {
-        alert(`Error deleting habit: ${error}`);
-      }
+      await habitService(supabase).deleteHabit(habitId);
+      await loadHabits();
+      setShowHabitMenu(null);
     } catch (error) {
-      console.error("Error deleting habit:", error);
-      alert("Failed to delete habit. Please try again.");
+      console.error('Error deleting habit:', error);
     }
   };
 

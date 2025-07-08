@@ -4,6 +4,7 @@ import { useAuthStore } from '../../lib/stores/authStore'
 import { goalService } from '../../lib/database/goals'
 import { categoryService } from '../../lib/database/categories'
 import { useUserTimeZone } from '../../lib/hooks/useUserTimeZone'
+import { useSupabase } from '../../lib/hooks/useSupabase'
 
 interface Task {
   id: string
@@ -60,6 +61,7 @@ export default function GoalsPage() {
   const [loading, setLoading] = useState(true)
   const [showCreateModal, setShowCreateModal] = useState(false)
   const [filter, setFilter] = useState('all')
+  const { supabase } = useSupabase();
   
   const [formData, setFormData] = useState<GoalFormData>({
     title: '',
@@ -76,17 +78,17 @@ export default function GoalsPage() {
     
     try {
       setLoading(true)
-      const { data: goalsData } = await goalService.getUserGoals(user.id)
+      const { data: goalsData } = await goalService(supabase).getUserGoals(user.id)
       setGoals(goalsData || [])
       
-      const { data: categoriesData } = await categoryService.getUserCategories(user.id)
+      const { data: categoriesData } = await categoryService(supabase).getUserCategories(user.id)
       setCategories(categoriesData || [])
     } catch (error) {
       console.error('Error loading data:', error)
     } finally {
       setLoading(false)
     }
-  }, [user])
+  }, [user, supabase])
 
   useEffect(() => {
     loadData()
@@ -106,7 +108,7 @@ export default function GoalsPage() {
         progress: formData.progress
       }
       
-      const { error } = await goalService.createGoal(goalData)
+      const { error } = await goalService(supabase).createGoal(goalData)
       
       if (!error) {
         await loadData()
@@ -128,7 +130,7 @@ export default function GoalsPage() {
 
   const updateGoalStatus = async (goalId: string, status: GoalStatus) => {
     try {
-      await goalService.updateGoal(goalId, { status })
+      await goalService(supabase).updateGoal(goalId, { status })
       await loadData()
     } catch (error) {
       console.error('Error updating goal:', error)
@@ -139,7 +141,7 @@ export default function GoalsPage() {
     if (!window.confirm('Are you sure you want to delete this goal?')) return
     
     try {
-      await goalService.deleteGoal(goalId)
+      await goalService(supabase).deleteGoal(goalId)
       await loadData()
     } catch (error) {
       console.error('Error deleting goal:', error)
