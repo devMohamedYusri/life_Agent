@@ -9,6 +9,7 @@ import { taskService } from '@//lib/database/tasks';
 import { goalService } from '@//lib/database/goals';
 import { journalService } from '@//lib/database/journal';
 import { useAuthStore } from '@//lib/stores/authStore';
+import { useSupabase } from '@//lib/hooks/useSupabase';
 
 interface InsightsState {
   recommendations: string;
@@ -19,6 +20,7 @@ interface InsightsState {
 
 export function AIInsights() {
   const { user } = useAuthStore();
+  const { supabase } = useSupabase();
   const [insights, setInsights] = useState<InsightsState>({
     recommendations: '',
     moodAnalysis: '',
@@ -31,9 +33,9 @@ export function AIInsights() {
 
     try {
       const [tasks, goals, entries] = await Promise.all([
-        taskService.getUserTasks(user.id),
-        goalService.getUserGoals(user.id),
-        journalService.getUserJournalEntries(user.id)
+        taskService(supabase).getUserTasks(user.id),
+        goalService(supabase).getUserGoals(user.id),
+        journalService(supabase).getUserJournalEntries(user.id)
       ]);
 
       const completedTasks = tasks.data?.filter((t: { completed: boolean }) => t.completed).length ?? 0;
@@ -55,7 +57,7 @@ export function AIInsights() {
       console.error('Error loading insights:', error);
       setInsights(prev => ({ ...prev, loading: false }));
     }
-  }, [user]);
+  }, [user, supabase]);
 
   useEffect(() => {
     if (user) {

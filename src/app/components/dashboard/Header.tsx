@@ -2,7 +2,7 @@
 
 import { useAuthStore } from "@//lib/stores/authStore"
 import { useRouter } from "next/navigation"
-import { useState, useEffect, Dispatch, SetStateAction, useRef, useCallback } from "react"
+import { useState, useEffect, Dispatch, SetStateAction, useRef } from "react"
 import { GlobalSearch } from "../GloabalSearch"
 import Link from "next/link"
 import Image from "next/image"

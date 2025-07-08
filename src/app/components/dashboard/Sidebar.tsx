@@ -5,7 +5,6 @@ import { usePathname } from "next/navigation"
 import { Dispatch, SetStateAction } from 'react'
 import { 
   LayoutDashboard, 
-  BarChart, 
   CheckSquare, 
   Target, 
   RefreshCw, 

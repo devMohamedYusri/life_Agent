@@ -49,6 +49,7 @@ export const authService = {
       
       return user;
     } catch (error) {
+      console.error('Error getting current user : ', error)
       return null;
     }
   },
@@ -67,6 +68,7 @@ export const authService = {
       
       return session;
     } catch (error) {
+      console.error('Error getting current session : ',error)
       return null;
     }
   },

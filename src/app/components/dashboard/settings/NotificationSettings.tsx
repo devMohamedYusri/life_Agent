@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react'
 import { useAuthStore } from '@//lib/stores/authStore'
 import { notificationService } from '@//lib/database/notifications'
-import { Bell, Mail, Check, Loader2, Clock, Calendar, Activity, Target } from 'lucide-react'
+import { Mail, Check, Loader2, Clock, Calendar, Activity, Target } from 'lucide-react'
 import PushSubscriptionManager from './PushSubscriptionManager'
 import { useSupabase } from '@//lib/hooks/useSupabase'
 
@@ -50,7 +50,7 @@ export default function NotificationSettings({ initialNotifications, onNotificat
 
   useEffect(() => {
     // Ensure we never set undefined values
-    setNotifications(prev => ({
+    setNotifications(() => ({
       ...DEFAULT_SETTINGS,
       ...initialNotifications
     }))

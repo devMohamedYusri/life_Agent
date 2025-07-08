@@ -1,11 +1,11 @@
 "use client"
 import Link  from "next/link";
-import { useRouter } from 'next/navigation';
-import { useAuthStore } from './lib/stores/authStore';
+// import { useRouter } from 'next/navigation';
+// import { useAuthStore } from './lib/stores/authStore';
 
 export default function Home() {
-  const { user, initialized } = useAuthStore();
-  const router = useRouter();
+  // const { user, initialized } = useAuthStore();
+  // const router = useRouter();
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-purple-900 via-blue-900 to-indigo-900 text-white">

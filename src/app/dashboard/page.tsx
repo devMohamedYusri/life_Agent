@@ -3,7 +3,6 @@
 
 import React, { useState, useEffect, useCallback, useMemo } from "react";
 import { useAuthStore } from "../lib/stores/authStore";
-import { userService } from "../lib/database/users";
 import { taskService } from "../lib/database/tasks";
 import type { Task } from '../lib/database/tasks';
 import { habitService } from "../lib/database/habits";
@@ -124,9 +123,9 @@ function getStoredData<T>(key: string): T | null {
   return UserStorage.getItem<T>(key);
 }
 
-function setStoredData<T>(key: string, data: T): void {
-  UserStorage.setItem(key, data);
-}
+// function setStoredData<T>(key: string, data: T): void {
+//   UserStorage.setItem(key, data);
+// }
 
 const calculateDaysUntilDue = (dueDate: string): number => {
   return Math.ceil((new Date(dueDate).getTime() - Date.now()) / (1000 * 60 * 60 * 24));
@@ -142,9 +141,9 @@ const cleanAIResponse = (text: string): string => {
 };
 
 // ============= Component Functions =============
-const renderEmptyState = (message: string) => (
-  <p className="text-gray-500 text-center py-8">{message}</p>
-);
+// const renderEmptyState = (message: string) => (
+//   <p className="text-gray-500 text-center py-8">{message}</p>
+// );
 
 const renderLoadingSpinner = (size: "small" | "large" = "large") => (
   <div className="flex items-center justify-center py-8">
@@ -182,12 +181,12 @@ export default function DashboardHome() {
     [dailySuggestions, processedSuggestions]
   );
 
-  const completionRate = useMemo(
-    () => stats?.totalTasks && stats?.completedTasks
-      ? Math.round((stats.completedTasks / stats.totalTasks) * 100)
-      : 0,
-    [stats]
-  );
+  // const completionRate = useMemo(
+  //   () => stats?.totalTasks && stats?.completedTasks
+  //     ? Math.round((stats.completedTasks / stats.totalTasks) * 100)
+  //     : 0,
+  //   [stats]
+  // );
 
   // ============= Effect Hooks =============
   useEffect(() => {
@@ -1201,7 +1200,7 @@ export default function DashboardHome() {
             </div>
           ) : (
             <div className="space-y-3">
-              {goals.filter(goal => goal.status === 'active').slice(0, HABITS_DISPLAY_LIMIT).map((goal, index) => (
+              {goals.filter(goal => goal.status === 'active').slice(0, HABITS_DISPLAY_LIMIT).map((goal) => (
                 renderGoalItem(goal)
               ))}
             </div>

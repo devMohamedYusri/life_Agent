@@ -409,7 +409,7 @@ async function handleMoodAnalysis(req: NextRequest, body: MoodAnalysisRequestBod
         const { entries } = body;
         
         // Analyze specific patterns in the user's journal entries
-        const moodPatterns = analyzeMoodPatterns(entries || []);
+        // const moodPatterns = analyzeMoodPatterns(entries || []);
 
         const messages: ChatMessage[] = [
             {
@@ -472,79 +472,79 @@ ${entries?.map(entry => `- Date: ${new Date(entry.created_at).toLocaleDateString
     }
 }
 
-// Add helper function to analyze mood patterns
-function analyzeMoodPatterns(entries: MoodAnalysisEntry[]) {
-    if (!entries || entries.length === 0) return "No mood data available";
+// // Add helper function to analyze mood patterns
+// function analyzeMoodPatterns(entries: MoodAnalysisEntry[]) {
+//     if (!entries || entries.length === 0) return "No mood data available";
     
-    const patterns = [];
+//     const patterns = [];
     
-    // Count mood frequencies
-    const moodCounts = entries.reduce((acc: Record<string, number>, entry) => {
-        const mood = entry.mood || 'neutral';
-        acc[mood] = (acc[mood] || 0) + 1;
-        return acc;
-    }, {} as Record<string, number>);
+//     // Count mood frequencies
+//     const moodCounts = entries.reduce((acc: Record<string, number>, entry) => {
+//         const mood = entry.mood || 'neutral';
+//         acc[mood] = (acc[mood] || 0) + 1;
+//         return acc;
+//     }, {} as Record<string, number>);
     
-    const totalEntries = entries.length;
-    const moodPercentages = Object.entries(moodCounts).map(([mood, count]) => 
-        `${mood}: ${Math.round((count / totalEntries) * 100)}%`
-    );
-    patterns.push(`Mood distribution: ${moodPercentages.join(', ')}`);
+//     const totalEntries = entries.length;
+//     const moodPercentages = Object.entries(moodCounts).map(([mood, count]) => 
+//         `${mood}: ${Math.round((count / totalEntries) * 100)}%`
+//     );
+//     patterns.push(`Mood distribution: ${moodPercentages.join(', ')}`);
     
-    // Check for mood streaks
-    let currentStreak = 1;
-    let longestStreak = 1;
-    let streakMood = entries[0]?.mood;
+//     // Check for mood streaks
+//     let currentStreak = 1;
+//     let longestStreak = 1;
+//     let streakMood = entries[0]?.mood;
     
-    for (let i = 1; i < entries.length; i++) {
-        if (entries[i].mood === entries[i-1].mood) {
-            currentStreak++;
-            if (currentStreak > longestStreak) {
-                longestStreak = currentStreak;
-                streakMood = entries[i].mood;
-            }
-        } else {
-            currentStreak = 1;
-        }
-    }
+//     for (let i = 1; i < entries.length; i++) {
+//         if (entries[i].mood === entries[i-1].mood) {
+//             currentStreak++;
+//             if (currentStreak > longestStreak) {
+//                 longestStreak = currentStreak;
+//                 streakMood = entries[i].mood;
+//             }
+//         } else {
+//             currentStreak = 1;
+//         }
+//     }
     
-    if (longestStreak > 2) {
-        patterns.push(`Longest mood streak: ${longestStreak} consecutive "${streakMood}" entries`);
-    }
+//     if (longestStreak > 2) {
+//         patterns.push(`Longest mood streak: ${longestStreak} consecutive "${streakMood}" entries`);
+//     }
     
-    // Check for day-of-week patterns
-    const dayMoods: Record<string, string[]> = {};
-    entries.forEach((entry: MoodAnalysisEntry) => {
-        const day = new Date(entry.created_at).toLocaleDateString('en-US', { weekday: 'long' });
-        if (!dayMoods[day]) dayMoods[day] = [];
-        dayMoods[day].push(entry.mood || 'neutral');
-    });
+//     // Check for day-of-week patterns
+//     const dayMoods: Record<string, string[]> = {};
+//     entries.forEach((entry: MoodAnalysisEntry) => {
+//         const day = new Date(entry.created_at).toLocaleDateString('en-US', { weekday: 'long' });
+//         if (!dayMoods[day]) dayMoods[day] = [];
+//         dayMoods[day].push(entry.mood || 'neutral');
+//     });
     
-    const dayPatterns = Object.entries(dayMoods).map(([day, moods]) => {
-        const negativeMoods = moods.filter(m => m === 'negative').length;
-        const positiveMoods = moods.filter(m => m === 'positive').length;
-        if (negativeMoods > positiveMoods * 2) return `${day}s tend to be challenging`;
-        if (positiveMoods > negativeMoods * 2) return `${day}s tend to be positive`;
-        return null;
-    }).filter(Boolean);
+//     const dayPatterns = Object.entries(dayMoods).map(([day, moods]) => {
+//         const negativeMoods = moods.filter(m => m === 'negative').length;
+//         const positiveMoods = moods.filter(m => m === 'positive').length;
+//         if (negativeMoods > positiveMoods * 2) return `${day}s tend to be challenging`;
+//         if (positiveMoods > negativeMoods * 2) return `${day}s tend to be positive`;
+//         return null;
+//     }).filter(Boolean);
     
-    if (dayPatterns.length > 0) {
-        patterns.push(`Day patterns: ${dayPatterns.join(', ')}`);
-    }
+//     if (dayPatterns.length > 0) {
+//         patterns.push(`Day patterns: ${dayPatterns.join(', ')}`);
+//     }
     
-    // Check for content themes
-    const negativeEntries = entries.filter(e => e.mood === 'negative' && e.content);
-    const positiveEntries = entries.filter(e => e.mood === 'positive' && e.content);
+//     // Check for content themes
+//     const negativeEntries = entries.filter(e => e.mood === 'negative' && e.content);
+//     const positiveEntries = entries.filter(e => e.mood === 'positive' && e.content);
     
-    if (negativeEntries.length > 0) {
-        const commonNegativeWords = findCommonThemes(negativeEntries.map(e => e.content || ''));
-        if (commonNegativeWords.length > 0) {
-            patterns.push(`Common themes in negative moods: ${commonNegativeWords.join(', ')}`);
-        }
-    }
+//     if (negativeEntries.length > 0) {
+//         const commonNegativeWords = findCommonThemes(negativeEntries.map(e => e.content || ''));
+//         if (commonNegativeWords.length > 0) {
+//             patterns.push(`Common themes in negative moods: ${commonNegativeWords.join(', ')}`);
+//         }
+//     }
     
-    return patterns.join('\n') || "Limited mood pattern data";
-}
+//     return patterns.join('\n') || "Limited mood pattern data";
+// }
 
 // Helper function to find common themes in text
 function findCommonThemes(texts: string[]): string[] {

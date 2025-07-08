@@ -1,4 +1,3 @@
-import { SupabaseClient } from "@supabase/supabase-js";
 
 export const journalService = (supabase) => ({
   // Get all journal entries for user

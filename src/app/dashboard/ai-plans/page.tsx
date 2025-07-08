@@ -1,7 +1,7 @@
 // app/dashboard/ai-plans/page.tsx
 'use client'
 
-import { useState, useEffect, useRef, memo, useCallback, useMemo } from 'react'
+import { useState, useEffect, useRef, memo, useCallback } from 'react'
 import { useAuthStore } from '../../lib/stores/authStore'
 import { taskService } from '../../lib/database/tasks'
 import { goalService } from '../../lib/database/goals'
@@ -199,30 +199,30 @@ const parseMessageContent = (content: string) => {
   return { thinkingContent, mainContent: parsedMainContent.length > 0 ? parsedMainContent : null };
 };
 
-const taskStatuses = ['pending', 'in_progress', 'completed', 'cancelled'] as const;
-type TaskStatusType = typeof taskStatuses[number];
+// const taskStatuses = ['pending', 'in_progress', 'completed', 'cancelled'] as const;
+// type TaskStatusType = typeof taskStatuses[number];
 
-const goalTypes = ['short-term', 'long-term'] as const;
-type GoalTypeType = typeof goalTypes[number];
+// const goalTypes = ['short-term', 'long-term'] as const;
+// type GoalTypeType = typeof goalTypes[number];
 
-const goalStatuses = ['active', 'completed', 'paused', 'cancelled'] as const;
-type GoalStatusType = typeof goalStatuses[number];
+// const goalStatuses = ['active', 'completed', 'paused', 'cancelled'] as const;
+// type GoalStatusType = typeof goalStatuses[number];
 
 // Helper function to get priority color classes
-const getPriorityColor = (priority: string = 'medium') => {
-  switch (priority.toLowerCase()) {
-    case 'urgent':
-      return 'from-red-500 to-red-700'
-    case 'high':
-      return 'from-orange-500 to-orange-600'
-    case 'medium':
-      return 'from-yellow-500 to-yellow-600'
-    case 'low':
-      return 'from-green-500 to-green-600'
-    default:
-      return 'from-purple-500 to-pink-500'
-  }
-}
+// const getPriorityColor = (priority: string = 'medium') => {
+//   switch (priority.toLowerCase()) {
+//     case 'urgent':
+//       return 'from-red-500 to-red-700'
+//     case 'high':
+//       return 'from-orange-500 to-orange-600'
+//     case 'medium':
+//       return 'from-yellow-500 to-yellow-600'
+//     case 'low':
+//       return 'from-green-500 to-green-600'
+//     default:
+//       return 'from-purple-500 to-pink-500'
+//   }
+// }
 
 // Helper function to get icon for suggestion type
 const getIconForSuggestionType = (type: string) => {
@@ -241,8 +241,8 @@ const getIconForSuggestionType = (type: string) => {
 }
 
 // Memoized MessageDisplay component
-const MessageDisplay = memo(({ message, user, onSuggestionDecision }: MessageDisplayProps) => {
-  const [showThinking, setShowThinking] = useState(false);
+const MessageDisplay = memo(({ message, onSuggestionDecision }: MessageDisplayProps) => {
+  // const [showThinking, setShowThinking] = useState(false);
   const { thinkingContent, mainContent } = parseMessageContent(message.content);
   const [isProcessing, setIsProcessing] = useState<{[key: string]: boolean}>({});
   const [displayedContent, setDisplayedContent] = useState('');

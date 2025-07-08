@@ -23,7 +23,6 @@ import {
   Clipboard
 } from 'lucide-react'
 import Link from 'next/link'
-import Image from 'next/image'
 import { useSupabase } from '@//lib/hooks/useSupabase'
 import { Database } from '@//types/supabase'
 import { SupabaseClient } from '@supabase/supabase-js'
