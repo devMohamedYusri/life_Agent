@@ -27,10 +27,13 @@ export async function POST(
     const params = await props.params;
     const notificationId = params.id;
     
-    // Verify the notification belongs to the user before marking as read
-    const { data: notification } = await notificationService.getById(notificationId);
+    // Create notification service instance with supabase client
+    const notificationSvc = notificationService(supabase);
     
-    if (!notification || !notification[0] || notification[0].user_id !== session.user.id) {
+    // Verify the notification belongs to the user before marking as read
+    const { data: notification, error: fetchError } = await notificationSvc.getById(notificationId);
+    
+    if (fetchError || !notification || notification.user_id !== session.user.id) {
       return NextResponse.json(
         { error: 'Notification not found' },
         { status: 404 }
@@ -38,7 +41,7 @@ export async function POST(
     }
     
     // Mark notification as read
-    const { data, error } = await notificationService.markAsRead(notificationId);
+    const { data, error } = await notificationSvc.markAsRead(notificationId);
     
     if (error) {
       return NextResponse.json(
